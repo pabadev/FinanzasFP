@@ -1,20 +1,22 @@
 import Link from "next/link";
 
-export default function PosPage({
+export default async function PosPage({
   params,
 }: {
-  params: { businessId: string };
+  params: Promise<{ businessId: string }>;
 }) {
+  const { businessId } = await params;
+
   return (
     <div className="dashboard-shell">
       <header className="topbar">
         <div>
-          <h2>POS · Negocio #{params.businessId}</h2>
+          <h2>POS · Negocio #{businessId}</h2>
         </div>
         <nav>
-          <Link href={`/business/${params.businessId}`}>Resumen</Link>
-          <Link href={`/business/${params.businessId}/pos`}>POS</Link>
-          <Link href={`/business/${params.businessId}/inventory`}>
+          <Link href={`/business/${businessId}`}>Resumen</Link>
+          <Link href={`/business/${businessId}/pos`}>POS</Link>
+          <Link href={`/business/${businessId}/inventory`}>
             Inventario
           </Link>
         </nav>

@@ -1,21 +1,23 @@
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 
-export default function BusinessDashboardPage({
+export default async function BusinessDashboardPage({
   params,
 }: {
-  params: { businessId: string };
+  params: Promise<{ businessId: string }>;
 }) {
+  const { businessId } = await params;
+
   return (
     <div className="dashboard-shell">
       <header className="topbar">
         <div>
-          <h2>Negocio #{params.businessId}</h2>
+          <h2>Negocio #{businessId}</h2>
         </div>
         <nav>
-          <Link href={`/business/${params.businessId}`}>Resumen</Link>
-          <Link href={`/business/${params.businessId}/pos`}>POS</Link>
-          <Link href={`/business/${params.businessId}/inventory`}>
+          <Link href={`/business/${businessId}`}>Resumen</Link>
+          <Link href={`/business/${businessId}/pos`}>POS</Link>
+          <Link href={`/business/${businessId}/inventory`}>
             Inventario
           </Link>
         </nav>

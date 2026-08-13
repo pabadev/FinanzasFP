@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { z } from "zod";
 
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { createSale } from "@/services/saleService";
 import { SaleInputSchema } from "@/lib/zodSchemas";
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
@@ -32,7 +30,12 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(sale, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Error interno",
+      },
+      { status: 400 },
+    );
   }
 }

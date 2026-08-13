@@ -1,9 +1,9 @@
-import mongoose from "mongoose";
-
-import Product from "@/models/Product";
+﻿import Product from "@/models/Product";
 import Sale from "@/models/Sale";
 import Account from "@/models/Account";
+import Transaction from "@/models/Transaction";
 import { connectDB } from "@/lib/db";
+import { requireEntityMembership } from "@/lib/rbac";
 
 interface SaleItemInput {
   productId: string;
@@ -19,78 +19,105 @@ export async function createSale(params: {
   userId: string;
 }) {
   await connectDB();
-  const session = await mongoose.startSession();
 
-  try {
-    let sale;
+  await requireEntityMembership(params.userId, params.entityId);
 
-    await session.withTransaction(async () => {
-      const saleItems: any[] = [];
-      let total = 0;
+  const saleItems: {
+    product: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    isService: boolean;
+  }[] = [];
+  let total = 0;
 
-      for (const item of params.items) {
-        const product = await Product.findById(item.productId).session(session);
-        if (!product) throw new Error(`Producto ${item.productId} no existe`);
-
-        if (product.type === "physical") {
-          if (product.stock < item.quantity) {
-            throw new Error(`Stock insuficiente para ${product.name}`);
-          }
-
-          product.stock -= item.quantity;
-          product.stockMovements.push({
-            change: -item.quantity,
-            reason: "sale",
-          });
-          await product.save({ session });
-        }
-
-        saleItems.push({
-          product: product._id,
-          name: product.name,
-          quantity: item.quantity,
-          unitPrice: product.price,
-          isService: product.type === "service",
-        });
-
-        total += product.price * item.quantity;
-      }
-
-      if (params.paymentMethod !== "credit") {
-        if (!params.accountId)
-          throw new Error("Cuenta requerida para pago no-crédito");
-
-        const account = await Account.findById(params.accountId).session(
-          session,
-        );
-        if (!account) throw new Error("Cuenta no encontrada");
-
-        account.balance += total;
-        await account.save({ session });
-      }
-
-      const [createdSale] = await Sale.create(
-        [
-          {
-            entity: params.entityId,
-            items: saleItems,
-            total,
-            paymentMethod: params.paymentMethod,
-            account:
-              params.paymentMethod !== "credit" ? params.accountId : undefined,
-            customer: params.customerId,
-            status: params.paymentMethod === "credit" ? "pending" : "paid",
-            soldBy: params.userId,
-          },
-        ],
-        { session },
-      );
-
-      sale = createdSale;
+  for (const item of params.items) {
+    const product = await Product.findOne({
+      _id: item.productId,
+      entity: params.entityId,
     });
 
-    return sale;
-  } finally {
-    session.endSession();
+    if (!product) throw new Error(`Producto ${item.productId} no existe`);
+
+    if (product.type === "physical") {
+      const updated = await Product.findOneAndUpdate(
+        {
+          _id: product._id,
+          entity: params.entityId,
+          stock: { $gte: item.quantity },
+        },
+        { $inc: { stock: -item.quantity } },
+        { new: true },
+      );
+
+      if (!updated) throw new Error(`Stock insuficiente para ${product.name}`);
+
+      await Product.updateOne(
+        { _id: product._id },
+        { $push: { stockMovements: { change: -item.quantity, reason: "sale" } } },
+      );
+    }
+
+    saleItems.push({
+      product: product._id.toString(),
+      name: product.name,
+      quantity: item.quantity,
+      unitPrice: product.price,
+      isService: product.type === "service",
+    });
+
+    total += product.price * item.quantity;
   }
+
+  let accountId: string | undefined;
+
+  if (params.paymentMethod !== "credit") {
+    if (!params.accountId)
+      throw new Error("Cuenta requerida para pago no-crÃ©dito");
+
+    const account = await Account.findOne({
+      _id: params.accountId,
+      entity: params.entityId,
+      isActive: true,
+    });
+
+    if (!account) throw new Error("Cuenta no encontrada");
+
+    await Account.findOneAndUpdate(
+      { _id: account._id, isActive: true },
+      { $inc: { balance: total } },
+      { new: true },
+    );
+
+    accountId = account._id.toString();
+  }
+
+  const [sale] = await Sale.create([
+    {
+      entity: params.entityId,
+      items: saleItems,
+      total,
+      paymentMethod: params.paymentMethod,
+      account: accountId,
+      customer: params.customerId,
+      status: params.paymentMethod === "credit" ? "pending" : "paid",
+      soldBy: params.userId,
+    },
+  ]);
+
+  if (accountId) {
+    await Transaction.create({
+      entity: params.entityId,
+      account: accountId,
+      type: "sale_payment",
+      amount: total,
+      currency: "USD",
+      description: `Venta #${sale._id}`,
+      category: "venta",
+      createdBy: params.userId,
+    });
+  }
+
+  return sale;
 }
+
