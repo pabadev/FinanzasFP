@@ -1,5 +1,19 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/lib/auth";
+import { connectDB } from "@/lib/db";
+import { requireEntityMembership } from "@/lib/rbac";
+import { formatMoney } from "@/lib/money";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { SignOutButton } from "@/components/dashboard/SignOutButton";
+import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
+import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
+import Entity from "@/models/Entity";
+import Account from "@/models/Account";
+import Transaction from "@/models/Transaction";
+import Sale from "@/models/Sale";
+import Product from "@/models/Product";
 
 export default async function BusinessDashboardPage({
   params,
@@ -7,58 +21,151 @@ export default async function BusinessDashboardPage({
   params: Promise<{ businessId: string }>;
 }) {
   const { businessId } = await params;
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  await requireEntityMembership(session.user.id, businessId);
+  await connectDB();
+
+  const entity = await Entity.findById(businessId);
+  if (!entity) {
+    return (
+      <div className="dashboard-shell">
+        <p>Entidad no encontrada.</p>
+      </div>
+    );
+  }
+
+  const currency = entity.baseCurrency ?? "USD";
+  const accounts = await Account.find({ entity: businessId, isActive: true });
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const [monthSales, lowStock, recent] = await Promise.all([
+    Sale.find({ entity: businessId, createdAt: { $gte: monthStart } }),
+    Product.find({
+      entity: businessId,
+      type: "physical",
+      $expr: { $lte: ["$stock", "$minStock"] },
+    }),
+    Transaction.find({ entity: businessId }).sort({ date: -1 }).limit(10),
+  ]);
+
+  const salesTotal = monthSales.reduce(
+    (sum, sale) => sum + (sale.total ?? 0),
+    0,
+  );
+  const cashSales = monthSales.filter((s) => s.paymentMethod !== "credit");
+  const pendingSales = monthSales.filter((s) => s.status !== "paid");
+
+  const accountsForForm = accounts.map((account) => ({
+    _id: account._id.toString(),
+    name: account.name,
+  }));
 
   return (
     <div className="dashboard-shell">
       <header className="topbar">
         <div>
-          <h2>Negocio #{businessId}</h2>
+          <h2>{entity.name}</h2>
         </div>
         <nav>
+          <Link href="/personal">Personal</Link>
           <Link href={`/business/${businessId}`}>Resumen</Link>
           <Link href={`/business/${businessId}/pos`}>POS</Link>
-          <Link href={`/business/${businessId}/inventory`}>
-            Inventario
-          </Link>
+          <Link href={`/business/${businessId}/inventory`}>Inventario</Link>
+          <SignOutButton />
         </nav>
       </header>
 
       <div className="summary-grid">
-        <MetricCard label="Ventas" value="$24,500" detail="Este mes" />
-        <MetricCard label="Margen" value="32%" detail="Neto" />
-        <MetricCard label="Clientes" value="184" detail="Activos" />
-        <MetricCard label="Cobranza" value="$9,300" detail="Pendientes" />
+        <MetricCard
+          label="Ventas"
+          value={formatMoney(salesTotal, currency)}
+          detail="Este mes"
+        />
+        <MetricCard
+          label="Ventas cobradas"
+          value={cashSales.length.toString()}
+          detail="Pagadas al contado"
+        />
+        <MetricCard
+          label="Pendientes"
+          value={pendingSales.length.toString()}
+          detail="Ventas a crédito"
+        />
+        <MetricCard
+          label="Stock bajo"
+          value={lowStock.length.toString()}
+          detail="Productos a reponer"
+        />
       </div>
 
-      <section className="panel">
-        <h3>Operación del negocio</h3>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Concepto</th>
-              <th>Estado</th>
-              <th>Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Venta del día</td>
-              <td>Pagada</td>
-              <td>$1,240.00</td>
-            </tr>
-            <tr>
-              <td>Compra de insumos</td>
-              <td>Proceso</td>
-              <td>$640.00</td>
-            </tr>
-            <tr>
-              <td>Transferencia interna</td>
-              <td>Confirmada</td>
-              <td>$2,100.00</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <div className="grid-two">
+        <section className="panel">
+          <h3>Cuentas</h3>
+          {accounts.length === 0 ? (
+            <p className="small-text">Sin cuentas todavía.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Cuenta</th>
+                  <th>Tipo</th>
+                  <th>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map((account) => (
+                  <tr key={account._id.toString()}>
+                    <td>{account.name}</td>
+                    <td>{account.type}</td>
+                    <td>{formatMoney(account.balance ?? 0, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <CreateAccountForm entityId={businessId} />
+        </section>
+
+        <section className="panel">
+          <h3>Movimientos recientes</h3>
+          {recent.length === 0 ? (
+            <p className="small-text">Sin movimientos todavía.</p>
+          ) : (
+            <ul>
+              {recent.map((item) => {
+                const amount =
+                  item.type === "expense" || item.type === "transfer_out"
+                    ? -item.amount
+                    : item.amount;
+                return (
+                  <li key={item._id.toString()}>
+                    <strong>{item.description || item.type}</strong>{" "}
+                    <span>
+                      {amount >= 0 ? "+" : "-"}
+                      {formatMoney(Math.abs(amount), currency)}
+                    </span>
+                    <div className="small-text">
+                      {item.category ? `${item.category} · ` : ""}
+                      {new Date(item.date ?? item.createdAt).toLocaleDateString(
+                        "es",
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <CreateTransactionForm
+            entityId={businessId}
+            accounts={accountsForForm}
+          />
+        </section>
+      </div>
     </div>
   );
 }

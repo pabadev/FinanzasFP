@@ -34,12 +34,13 @@ const TransactionSchema = new Schema(
     counterpartEntity: { type: Types.ObjectId, ref: "Entity" },
     description: { type: String },
     category: { type: String },
+    date: { type: Date, default: Date.now, index: true },
     createdBy: { type: Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true },
 );
 
-TransactionSchema.index({ entity: 1, createdAt: -1 });
-TransactionSchema.index({ account: 1, createdAt: -1 });
+TransactionSchema.index({ entity: 1, date: -1 });
+TransactionSchema.index({ account: 1, date: -1 });
 
 export default models.Transaction || model("Transaction", TransactionSchema);

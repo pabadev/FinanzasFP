@@ -3,6 +3,8 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 
 import User from "@/models/User";
+import Entity from "@/models/Entity";
+import Account from "@/models/Account";
 import { connectDB } from "@/lib/db";
 import { rateLimit } from "@/lib/rateLimit";
 
@@ -65,6 +67,23 @@ export async function POST(request: Request) {
     email: parsed.data.email.toLowerCase(),
     passwordHash,
     entities: [],
+  });
+
+  const entity = await Entity.create({
+    name: parsed.data.name,
+    type: "personal",
+    ownerUser: user._id,
+    baseCurrency: "USD",
+  });
+
+  user.entities.push({ entity: entity._id, role: "owner" });
+  await user.save();
+
+  await Account.create({
+    entity: entity._id,
+    name: "Efectivo",
+    type: "cash",
+    currency: "USD",
   });
 
   return NextResponse.json(

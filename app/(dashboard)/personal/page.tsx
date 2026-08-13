@@ -1,19 +1,83 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/lib/auth";
+import { connectDB } from "@/lib/db";
+import { getUserEntityIds } from "@/lib/rbac";
+import { formatMoney } from "@/lib/money";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { SignOutButton } from "@/components/dashboard/SignOutButton";
+import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
+import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
+import Entity from "@/models/Entity";
+import Account from "@/models/Account";
+import Transaction from "@/models/Transaction";
 
-const accounts = [
-  { name: "Cuenta principal", balance: "$4,250.00", type: "bank" },
-  { name: "Efectivo", balance: "$1,180.00", type: "cash" },
-  { name: "Tarjeta", balance: "$820.00", type: "credit_card" },
-];
+export default async function PersonalDashboardPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
 
-const recent = [
-  { description: "Salario", amount: "+$2,800.00", date: "Hoy" },
-  { description: "Renta", amount: "-$1,350.00", date: "Ayer" },
-  { description: "Supermercado", amount: "-$420.00", date: "Martes" },
-];
+  await connectDB();
 
-export default function PersonalDashboardPage() {
+  const entityIds = await getUserEntityIds(session.user.id);
+  const personalEntity = await Entity.findOne({
+    _id: { $in: entityIds },
+    type: "personal",
+  });
+  const businessEntities = await Entity.find({
+    _id: { $in: entityIds },
+    type: "business",
+  });
+
+  if (!personalEntity) {
+    return (
+      <div className="dashboard-shell">
+        <p>No tienes una entidad personal. Crea una entidad primero.</p>
+      </div>
+    );
+  }
+
+  const entityId = personalEntity._id.toString();
+  const accounts = await Account.find({ entity: entityId, isActive: true });
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthTxs = await Transaction.find({
+    entity: entityId,
+    date: { $gte: monthStart },
+  }).select("type amount");
+
+  let income = 0;
+  let expense = 0;
+  let transfers = 0;
+
+  for (const tx of monthTxs) {
+    if (tx.type === "income" || tx.type === "sale_payment") {
+      income += tx.amount;
+    } else if (tx.type === "expense") {
+      expense += tx.amount;
+    } else if (tx.type === "transfer_in" || tx.type === "transfer_out") {
+      transfers += 1;
+    }
+  }
+
+  const balance = accounts.reduce(
+    (sum, account) => sum + (account.balance ?? 0),
+    0,
+  );
+
+  const recent = await Transaction.find({ entity: entityId })
+    .sort({ date: -1 })
+    .limit(10);
+
+  const currency = personalEntity.baseCurrency ?? "USD";
+
+  const accountsForForm = accounts.map((account) => ({
+    _id: account._id.toString(),
+    name: account.name,
+  }));
+
   return (
     <div className="dashboard-shell">
       <header className="topbar">
@@ -22,18 +86,32 @@ export default function PersonalDashboardPage() {
         </div>
         <nav>
           <Link href="/personal">Personal</Link>
-          <Link href="/business/1">Negocio</Link>
-          <Link href="/login">Salir</Link>
+          {businessEntities.length > 0 ? (
+            <Link href={`/business/${businessEntities[0]._id}`}>Negocio</Link>
+          ) : null}
+          <SignOutButton />
         </nav>
       </header>
 
       <div className="summary-grid">
-        <MetricCard label="Ingresos" value="$8,420" detail="Este mes" />
-        <MetricCard label="Gastos" value="$4,780" detail="Este mes" />
-        <MetricCard label="Saldo" value="$13,600" detail="Total consolidado" />
+        <MetricCard
+          label="Ingresos"
+          value={formatMoney(income, currency)}
+          detail="Este mes"
+        />
+        <MetricCard
+          label="Gastos"
+          value={formatMoney(expense, currency)}
+          detail="Este mes"
+        />
+        <MetricCard
+          label="Saldo"
+          value={formatMoney(balance, currency)}
+          detail="Total consolidado"
+        />
         <MetricCard
           label="Transferencias"
-          value="17"
+          value={transfers.toString()}
           detail="Últimos 30 días"
         />
       </div>
@@ -41,36 +119,61 @@ export default function PersonalDashboardPage() {
       <div className="grid-two">
         <section className="panel">
           <h3>Cuentas</h3>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Cuenta</th>
-                <th>Tipo</th>
-                <th>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((account) => (
-                <tr key={account.name}>
-                  <td>{account.name}</td>
-                  <td>{account.type}</td>
-                  <td>{account.balance}</td>
+          {accounts.length === 0 ? (
+            <p className="small-text">Sin cuentas todavía.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Cuenta</th>
+                  <th>Tipo</th>
+                  <th>Saldo</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {accounts.map((account) => (
+                  <tr key={account._id.toString()}>
+                    <td>{account.name}</td>
+                    <td>{account.type}</td>
+                    <td>{formatMoney(account.balance ?? 0, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <CreateAccountForm entityId={entityId} />
         </section>
 
         <section className="panel">
           <h3>Actividad reciente</h3>
-          <ul>
-            {recent.map((item) => (
-              <li key={item.description}>
-                <strong>{item.description}</strong> <span>{item.amount}</span>
-                <div className="small-text">{item.date}</div>
-              </li>
-            ))}
-          </ul>
+          {recent.length === 0 ? (
+            <p className="small-text">Sin movimientos todavía.</p>
+          ) : (
+            <ul>
+              {recent.map((item) => {
+                const amount =
+                  item.type === "expense" || item.type === "transfer_out"
+                    ? -item.amount
+                    : item.amount;
+                return (
+                  <li key={item._id.toString()}>
+                    <strong>{item.description || item.type}</strong>{" "}
+                    <span>
+                      {amount >= 0 ? "+" : "-"}
+                      {formatMoney(Math.abs(amount), currency)}
+                    </span>
+                    <div className="small-text">
+                      {item.category ? `${item.category} · ` : ""}
+                      {new Date(item.date ?? item.createdAt).toLocaleDateString(
+                        "es",
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <CreateTransactionForm entityId={entityId} accounts={accountsForForm} />
         </section>
       </div>
     </div>
