@@ -7,6 +7,7 @@ import { getUserEntityIds } from "@/lib/rbac";
 import { formatMoney } from "@/lib/money";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
+import { PersonalOnboarding } from "@/components/dashboard/PersonalOnboarding";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
 import Entity from "@/models/Entity";
@@ -30,11 +31,7 @@ export default async function PersonalDashboardPage() {
   });
 
   if (!personalEntity) {
-    return (
-      <div className="dashboard-shell">
-        <p>No tienes una entidad personal. Crea una entidad primero.</p>
-      </div>
-    );
+    return <PersonalOnboarding />;
   }
 
   const entityId = personalEntity._id.toString();
