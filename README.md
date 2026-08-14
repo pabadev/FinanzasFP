@@ -92,7 +92,7 @@ middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 - **Account**: entity, name, type (`bank|cash|credit_card|wallet`), currency, balance, creditLimit, isActive.
 - **Transaction** (ledger): entity, account, type (`income|expense|transfer_in|transfer_out|capital_injection|partner_withdrawal|interentity_loan|sale_payment`), amount, currency, `relatedTransaction` (par de transferencia), counterpartEntity, description, category, date, createdBy.
 - **Product**: entity, name, sku (único por entidad), type (`physical|service`), price/cost, stock, minStock, stockMovements[].
-- **Sale**: entity, items[] (snapshot), total, paidAmount, paymentMethod (`cash|transfer|card|credit`), account, customer, status (`paid|pending|partial`), soldBy.
+- **Sale**: entity, items[] (snapshot, unitPrice editable en POS), total, paidAmount, paymentMethod (`cash|transfer|card|credit`), account, customer, status (`paid|pending|partial|voided`), soldBy.
 - **Customer**: entity, name, contact, phone, email, debt.
 - **Credit**: entity, lender, direction (`incoming|outgoing`), amount, currency, rate, term, frequency (`monthly|biweekly|weekly`), amortization (`french|american`), installments[] (number, dueDate, principal, interest, total, paid), status (`active|paid|cancelled`).
 - **ExchangeRate**: from, to (único `from+to`), rate, source.
@@ -126,6 +126,7 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/sales` | POST | Crea venta (descuenta stock atómico, ledger `sale_payment`; `unitPrice` opcional por ítem) |
 | `/api/sales` | GET | Lista ventas de la entidad |
 | `/api/sales/payment` | POST | Abono a venta a crédito (acredita cuenta, `income`, actualiza status) |
+| `/api/sales/:id` | DELETE | Anula venta (`sale_void`: repone stock, revierte pago/abonos, audita) |
 | `/api/customers?entity=` | GET | Lista clientes de la entidad |
 | `/api/customers` | POST | Crea cliente |
 | `/api/credits?entity=` | GET | Lista créditos de la entidad |

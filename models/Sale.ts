@@ -31,7 +31,7 @@ const SaleSchema = new Schema(
     customer: { type: Types.ObjectId, ref: "Customer" },
     status: {
       type: String,
-      enum: ["paid", "pending", "partial"],
+      enum: ["paid", "pending", "partial", "voided"],
       default: "paid",
     },
     soldBy: { type: Types.ObjectId, ref: "User", required: true },

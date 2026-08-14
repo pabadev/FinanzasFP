@@ -13,6 +13,7 @@ import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm"
 import { EditAccountForm } from "@/components/forms/EditAccountForm";
 import { EditTransactionForm } from "@/components/forms/EditTransactionForm";
 import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
+import { VoidSaleButton } from "@/components/forms/VoidSaleButton";
 import { SalePaymentForm } from "@/components/forms/SalePaymentForm";
 import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import Entity from "@/models/Entity";
@@ -52,7 +53,7 @@ export default async function BusinessDashboardPage({
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [monthSales, lowStock, recent, pendingSalesAll, customers, credits] =
+  const [monthSales, lowStock, recent, pendingSalesAll, customers, credits, recentSales] =
     await Promise.all([
       Sale.find({ entity: businessId, createdAt: { $gte: monthStart } }),
       Product.find({
@@ -70,6 +71,10 @@ export default async function BusinessDashboardPage({
         .limit(20),
       Customer.find({ entity: businessId }).sort({ name: 1 }),
       Credit.find({ entity: businessId }).sort({ createdAt: -1 }),
+      Sale.find({ entity: businessId })
+        .populate("customer", "name")
+        .sort({ createdAt: -1 })
+        .limit(20),
     ]);
 
   const categories = await Category.find({ entity: businessId });
@@ -325,6 +330,61 @@ export default async function BusinessDashboardPage({
           currency={currency}
         />
       </div>
+
+      <section className="panel mt">
+        <h3>Ventas recientes</h3>
+        {recentSales.length === 0 ? (
+          <p className="small-text">Sin ventas todavía.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Método</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentSales.map((sale) => {
+                const customerName =
+                  (sale.customer as unknown as { name?: string } | null)
+                    ?.name ?? "—";
+                return (
+                  <tr key={sale._id.toString()}>
+                    <td>
+                      {new Date(
+                        sale.createdAt ?? sale._id.getTimestamp(),
+                      ).toLocaleDateString("es")}
+                    </td>
+                    <td>{customerName}</td>
+                    <td>{formatMoney(sale.total, currency)}</td>
+                    <td>{sale.paymentMethod}</td>
+                    <td>
+                      {sale.status === "voided" ? (
+                        <span className="small-text">Anulada</span>
+                      ) : sale.status === "paid" ? (
+                        <span className="success-text">Pagada</span>
+                      ) : (
+                        <span className="error-text">{sale.status}</span>
+                      )}
+                    </td>
+                    <td>
+                      {sale.status !== "voided" && (
+                        <VoidSaleButton
+                          saleId={sale._id.toString()}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
     </div>
   );
 }

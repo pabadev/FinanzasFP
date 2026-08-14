@@ -3,8 +3,9 @@ import Sale from "@/models/Sale";
 import Customer from "@/models/Customer";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
+import AuditLog from "@/models/AuditLog";
 import { connectDB } from "@/lib/db";
-import { requireEntityMembership } from "@/lib/rbac";
+import { requireRole, requireEntityMembership } from "@/lib/rbac";
 
 interface SaleItemInput {
   productId: string;
@@ -197,5 +198,109 @@ export async function registerSalePayment(params: {
   });
 
   return Sale.findById(params.saleId);
+}
+
+export async function voidSale(params: {
+  saleId: string;
+  userId: string;
+}) {
+  await connectDB();
+
+  const sale = await Sale.findById(params.saleId);
+  if (!sale) throw new Error("Venta no encontrada");
+
+  const entityId = sale.entity.toString();
+  await requireRole(
+    params.userId,
+    ["owner", "admin", "accountant"],
+    entityId,
+  );
+
+  if (sale.status === "voided") throw new Error("La venta ya fue anulada");
+
+  const paidSoFar = sale.paidAmount ?? 0;
+  const remaining = sale.total - paidSoFar;
+
+  for (const item of sale.items ?? []) {
+    if (item.isService) continue;
+    await Product.findOneAndUpdate(
+      { _id: item.product, entity: entityId },
+      {
+        $inc: { stock: item.quantity },
+        $push: {
+          stockMovements: { change: item.quantity, reason: "adjustment" },
+        },
+      },
+    );
+  }
+
+  if (sale.paymentMethod === "credit") {
+    if (paidSoFar > 0) {
+      const abonos = await Transaction.find({
+        entity: entityId,
+        type: "income",
+        description: `Abono venta #${sale._id}`,
+      });
+      for (const abono of abonos) {
+        const updated = await Account.findOneAndUpdate(
+          {
+            _id: abono.account,
+            isActive: true,
+            balance: { $gte: abono.amount },
+          },
+          { $inc: { balance: -abono.amount } },
+        );
+        if (!updated)
+          throw new Error(
+            "Fondos insuficientes para revertir los abonos de la venta",
+          );
+      }
+      await Transaction.deleteMany({
+        _id: { $in: abonos.map((abono) => abono._id) },
+      });
+    }
+    if (sale.customer) {
+      await Customer.findByIdAndUpdate(sale.customer, {
+        $inc: { debt: -remaining },
+      });
+    }
+  } else {
+    const account = await Account.findOne({
+      _id: sale.account,
+      entity: entityId,
+      isActive: true,
+    });
+    if (!account) throw new Error("Cuenta de la venta no encontrada");
+    const updated = await Account.findOneAndUpdate(
+      {
+        _id: account._id,
+        isActive: true,
+        balance: { $gte: sale.total },
+      },
+      { $inc: { balance: -sale.total } },
+    );
+    if (!updated)
+      throw new Error(
+        "Fondos insuficientes en la cuenta para anular la venta",
+      );
+  }
+
+  await Sale.findByIdAndUpdate(sale._id, { status: "voided" });
+
+  await AuditLog.create({
+    entity: entityId,
+    user: params.userId,
+    action: "sale_void",
+    targetCollection: "Sale",
+    targetId: sale._id,
+    before: {
+      total: sale.total,
+      status: sale.status,
+      paymentMethod: sale.paymentMethod,
+    },
+    after: { status: "voided" },
+  });
+
+  return Sale.findById(sale._id);
 }
 
