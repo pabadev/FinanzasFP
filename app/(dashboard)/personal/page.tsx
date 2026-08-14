@@ -8,11 +8,13 @@ import { formatMoney } from "@/lib/money";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { PersonalOnboarding } from "@/components/dashboard/PersonalOnboarding";
+import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
 import Entity from "@/models/Entity";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
+import Credit from "@/models/Credit";
 
 export default async function PersonalDashboardPage() {
   const session = await auth();
@@ -67,6 +69,10 @@ export default async function PersonalDashboardPage() {
   const recent = await Transaction.find({ entity: entityId })
     .sort({ date: -1 })
     .limit(10);
+
+  const credits = await Credit.find({ entity: entityId }).sort({
+    createdAt: -1,
+  });
 
   const currency = personalEntity.baseCurrency ?? "USD";
 
@@ -172,6 +178,15 @@ export default async function PersonalDashboardPage() {
           )}
           <CreateTransactionForm entityId={entityId} accounts={accountsForForm} />
         </section>
+      </div>
+
+      <div className="mt">
+        <CreditsPanel
+          entityId={entityId}
+          credits={credits}
+          accounts={accounts}
+          currency={currency}
+        />
       </div>
     </div>
   );

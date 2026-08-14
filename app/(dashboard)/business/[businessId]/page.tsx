@@ -10,12 +10,14 @@ import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
 import { SalePaymentForm } from "@/components/forms/SalePaymentForm";
+import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import Entity from "@/models/Entity";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
 import Sale from "@/models/Sale";
 import Product from "@/models/Product";
 import Customer from "@/models/Customer";
+import Credit from "@/models/Credit";
 
 export default async function BusinessDashboardPage({
   params,
@@ -45,7 +47,7 @@ export default async function BusinessDashboardPage({
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [monthSales, lowStock, recent, pendingSalesAll, customers] =
+  const [monthSales, lowStock, recent, pendingSalesAll, customers, credits] =
     await Promise.all([
       Sale.find({ entity: businessId, createdAt: { $gte: monthStart } }),
       Product.find({
@@ -58,6 +60,7 @@ export default async function BusinessDashboardPage({
         .sort({ createdAt: -1 })
         .limit(20),
       Customer.find({ entity: businessId }).sort({ name: 1 }),
+      Credit.find({ entity: businessId }).sort({ createdAt: -1 }),
     ]);
 
   const salesTotal = monthSales.reduce(
@@ -245,6 +248,15 @@ export default async function BusinessDashboardPage({
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="mt">
+        <CreditsPanel
+          entityId={businessId}
+          credits={credits}
+          accounts={accounts}
+          currency={currency}
+        />
       </div>
     </div>
   );

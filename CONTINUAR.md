@@ -62,21 +62,31 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   - `GET|POST /api/products?entity=` — productos físicos/servicio (stock atómico al vender).
   - `POST /api/sales` — ventas (descuento de inventario, métodos cash|transfer|card|credit,
     ledger `sale_payment`).
+  - `GET /api/sales` — listar ventas.
+  - `POST /api/sales/payment` — abono a venta a crédito (acredita cuenta, `income`, actualiza status).
+  - `GET|POST /api/customers?entity=` — listar / crear clientes (scoping por entidad).
+  - `GET|POST /api/credits?entity=` — listar / crear créditos (desembolso + amortización).
+  - `POST /api/credits/payment` — pagar cuota (marca pagada + `Transaction`).
   - `POST /api/register` — con rate limit (5/min por IP) y validación de password ≥8.
+- **POS real e inventario real**: `pos/page.tsx` con `PosCheckout` (consumo de `/api/products` y `/api/sales`),
+  `inventory/page.tsx` con `CreateProductForm`, movimientos de stock y alertas de mínimo.
+- **Clientes y cuentas por cobrar**: `models/Customer.ts`, `GET|POST /api/customers?entity=`,
+  `POST /api/sales/payment` (abonos), panel en dashboard de negocio.
+- **Créditos/préstamos**: `models/Credit.ts` (lender, direction, rate, term, frequency, installments),
+  `services/creditService.ts` (amortización francesa/americana), `POST /api/credits` (desembolso `income`
+  o `expense` según dirección) y `POST /api/credits/payment` (paga cuota → `expense`/`income` y marca pagada).
+  Panel `CreditsPanel` en dashboards personal y de negocio con `CreateCreditForm` y `PayInstallmentForm`.
 - **Dashboards reales**: `app/(dashboard)/personal/page.tsx` y
   `app/(dashboard)/business/[businessId]/page.tsx` (cuentas, KPIs del mes, actividad reciente,
-  ventas del mes, stock bajo). Formularios: `CreateAccountForm`, `CreateTransactionForm`.
+  ventas del mes, stock bajo, cuentas por cobrar, créditos). Formularios: `CreateAccountForm`,
+  `CreateTransactionForm`, `CreateProductForm`, `CreateCustomerForm`, `CreateCreditForm`,
+  `PayInstallmentForm`, `SalePaymentForm`.
 - **Seguridad aplicada**: headers (CSP, X-Frame-Options…), scoping IDOR, rol real, sin enumeración
   de usuarios, rate limiting en login/register (en memoria), `npm audit` = 0 vulnerabilidades.
 
 ## 6. Pendiente / limitaciones conocidas
 
-- **`README.md` y `CONTINUAR.md` aún NO commiteados** (git status: `??`).
-- **POS e inventario siguen con datos MOCK** (`pos/page.tsx`, `inventory/page.tsx`).
-- **No existe el modelo `Customer`** pero `Sale.customer` lo referencia (`ref: "Customer"`):
-  al usar ventas a crédito sin ese modelo no se puede poblar. La Fase 2 lo resuelve.
-- **Sin UI** para: transferencias, productos, crear entidad de negocio (solo API), ventas.
-- **`Credit`/`Loan` no existe** — no hay créditos ni cuotas.
+- **Sin UI** para: transferencias, crear entidad de negocio (solo API).
 - **Rate limiter en memoria** (`lib/rateLimit.ts`): en Vercel (serverless) cada instancia tiene su
   propio store → migrar a Redis/@upstash antes de producción real.
 - **2FA**: campos `twoFactorSecret`/`twoFactorEnabled` en `User` sin implementar; si se activa,
@@ -87,27 +97,9 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
 
 ## 7. PASOS A SEGUIR (en orden)
 
-### Paso 0 — Dejar el repo al día
-```bash
-git add README.md CONTINUAR.md
-git commit -m "docs: readme y guía de continuidad"
-git push
-```
-
-### Fase 2 — Ventas e inventario reales
-1. Crear **`models/Customer.ts`** (entity, name, contact, phone, email, debt/balance) + API
-   `GET|POST /api/customers?entity=` con scoping.
-2. **Cuentas por cobrar**: sobre `Sale` con `status: pending|partial`, endpoint para registrar
-   abonos (payment) que acredite la cuenta, actualice `status` y cree `Transaction` `income`.
-3. **POS real**: `pos/page.tsx` consumiendo `GET /api/products?entity=` y `POST /api/sales`.
-4. **Inventario real**: `inventory/page.tsx` con `GET /api/products` y alta de producto
-   (`CreateProductForm`), stockMovements y alerta de mínimo.
-
-### Fase 3 — Créditos y préstamos
-1. **`models/Credit.ts`**: entity, lender, amount, currency, rate, term, frequency, cuotas.
-2. **Servicio de amortización** (francés/americano) en `services/creditService.ts`.
-3. **Desembolso** = `income` en la cuenta + registro del crédito.
-4. **Pago de cuota** = `expense` con categoría + marcar cuota pagada + crear `Transaction`.
+### Fases 2 y 3 — ✅ COMPLETADAS
+Ventas e inventario reales (Customer, cuentas por cobrar, POS, inventario) y créditos/préstamos
+(Credit, amortización, desembolso, pago de cuota) implementados y desplegados.
 
 ### Fase 4 — Consolidación
 1. **UI de transferencias** (`CreateTransferForm`) → `POST /api/transfers`, incl. inter-entidad

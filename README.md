@@ -17,10 +17,13 @@ Funcional de punta a punta en el flujo de dinero básico:
 - ✅ **Ingresos y gastos** con saldo atómico y ledger (`Transaction`).
 - ✅ **Transferencias** entre cuentas (misma moneda, débito atómico, tipos inter-entidad).
 - ✅ **Productos** (physical/service) y **ventas** con descuento atómico de inventario y métodos de pago (incl. crédito).
+- ✅ **Clientes** y **cuentas por cobrar** (`Customer`, ventas `pending|partial`, abonos que acreditan la cuenta y crean `income`).
+- ✅ **POS real** e **inventario real** (stock, alertas de mínimo, movimientos).
+- ✅ **Créditos/préstamos** (`Credit`): amortización francesa/americana, desembolso (`income`) y pago de cuota (`expense`).
 - ✅ **Dashboards** (personal y negocio) con datos reales + formularios de alta de cuentas y movimientos.
 - ✅ **Seguridad**: scoping multi-tenant (IDOR cerrado), headers de seguridad, validación zod, sin enumeración de usuarios, `npm audit` limpio.
 
-Pendiente (ver [Roadmap](#roadmap)): modelo `Customer`, ventas a crédito con abonos, `Credit/Loan`, `ExchangeRate`, POS/inventario reales, UI de transferencias, 2FA, rate limiter con Redis.
+Pendiente (ver [Roadmap](#roadmap)): `ExchangeRate`, UI de transferencias, categorías configurables, 2FA, rate limiter con Redis.
 
 ---
 
@@ -49,10 +52,14 @@ app/
   api/auth/[...nextauth]/            # handlers de Auth.js v5
   api/register, api/entities, api/accounts,
   api/transactions, api/transfers,
-  api/products, api/sales            # Route Handlers
+  api/products, api/sales, api/sales/payment,
+  api/customers, api/credits, api/credits/payment  # Route Handlers
 components/
-  dashboard/  MetricCard, SignOutButton, PersonalOnboarding
-  forms/      CreateAccountForm, CreateTransactionForm
+  dashboard/  MetricCard, SignOutButton, PersonalOnboarding, CreditsPanel
+  forms/      CreateAccountForm, CreateTransactionForm, CreateCustomerForm,
+              CreateProductForm, CreateCreditForm, PayInstallmentForm,
+              SalePaymentForm
+  pos/        PosCheckout
   ui/         button
 lib/
   auth.ts     # config Auth.js v5 + rol real + rate limit login
@@ -61,9 +68,10 @@ lib/
   zodSchemas.ts
   money.ts    # formateo de centavos → moneda
   rateLimit.ts
-models/       # User, Entity, Account, Transaction, Product, Sale, AuditLog
+models/       # User, Entity, Account, Transaction, Product, Sale,
+              # Customer, Credit, AuditLog
 services/     # accountService, transactionService, transferService,
-              # saleService, auditService
+              # saleService, customerService, creditService, auditService
 types/next-auth.d.ts
 middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 ```
@@ -79,7 +87,9 @@ middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 - **Account**: entity, name, type (`bank|cash|credit_card|wallet`), currency, balance, creditLimit, isActive.
 - **Transaction** (ledger): entity, account, type (`income|expense|transfer_in|transfer_out|capital_injection|partner_withdrawal|interentity_loan|sale_payment`), amount, currency, `relatedTransaction` (par de transferencia), counterpartEntity, description, category, date, createdBy.
 - **Product**: entity, name, sku (único por entidad), type (`physical|service`), price/cost, stock, minStock, stockMovements[].
-- **Sale**: entity, items[] (snapshot), total, paymentMethod (`cash|transfer|card|credit`), account, customer (ref pendiente de modelo), status (`paid|pending|partial`), soldBy.
+- **Sale**: entity, items[] (snapshot), total, paidAmount, paymentMethod (`cash|transfer|card|credit`), account, customer, status (`paid|pending|partial`), soldBy.
+- **Customer**: entity, name, contact, phone, email, debt.
+- **Credit**: entity, lender, direction (`incoming|outgoing`), amount, currency, rate, term, frequency (`monthly|biweekly|weekly`), amortization (`french|american`), installments[] (number, dueDate, principal, interest, total, paid), status (`active|paid|cancelled`).
 - **AuditLog**: append-only, action (`delete|manual_balance_adjustment|transfer|role_change|sale_void`), before/after, ip.
 
 Índices compuestos en `entity+date` para Transaction y `entity+sku` (unique) para Product.
@@ -104,6 +114,13 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/products?entity=` | GET | Lista productos de la entidad |
 | `/api/products` | POST | Crea producto |
 | `/api/sales` | POST | Crea venta (descuenta stock atómico, ledger `sale_payment`) |
+| `/api/sales` | GET | Lista ventas de la entidad |
+| `/api/sales/payment` | POST | Abono a venta a crédito (acredita cuenta, `income`, actualiza status) |
+| `/api/customers?entity=` | GET | Lista clientes de la entidad |
+| `/api/customers` | POST | Crea cliente |
+| `/api/credits?entity=` | GET | Lista créditos de la entidad |
+| `/api/credits` | POST | Crea crédito (amortización + desembolso `income`/`expense`) |
+| `/api/credits/payment` | POST | Paga cuota (marca pagada, crea `Transaction`) |
 
 ---
 
@@ -154,8 +171,8 @@ npm run lint       # eslint (flat config)
 
 ## Roadmap
 
-1. **Fase 2 — Ventas e inventario reales**: modelo `Customer` + cuentas por cobrar (abonos, `status: partial`), POS e inventario conectados a `/api/sales` y `/api/products`, alertas de stock mínimo.
-2. **Fase 3 — Créditos/préstamos**: modelo `Credit`/`Loan` (prestador, monto, tasa, plazo, cuotas), servicio de amortización, desembolso (`income`) y pago de cuota (`expense`) que marca cuotas pagadas.
+1. ✅ **Fase 2 — Ventas e inventario reales**: modelo `Customer` + cuentas por cobrar (abonos, `status: partial`), POS e inventario conectados a `/api/sales` y `/api/products`, alertas de stock mínimo.
+2. ✅ **Fase 3 — Créditos/préstamos**: modelo `Credit` (prestador, monto, tasa, plazo, cuotas), servicio de amortización, desembolso (`income`) y pago de cuota (`expense`) que marca cuotas pagadas.
 3. **Fase 4 — Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio.
 4. **Fase 5 — Cierre**: 2FA TOTP (secreto cifrado), rate limiter con Redis/Upstash (hoy en memoria, no sirve multi-instancia), auditoría completa y reversión/anulación de operaciones, mejorar CSP con nonces.
 

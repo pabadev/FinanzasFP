@@ -54,6 +54,26 @@ export const SalePaymentInputSchema = z.object({
   amount: z.number().int().positive(),
 });
 
+export const CreditInputSchema = z.object({
+  entity: z.string().length(24),
+  lender: z.string().min(2).max(120),
+  direction: z.enum(["incoming", "outgoing"]).default("incoming"),
+  amount: z.number().int().positive(),
+  currency: z.string().length(3).default("USD"),
+  rate: z.number().nonnegative().default(0),
+  term: z.number().int().positive().max(600),
+  frequency: z.enum(["monthly", "biweekly", "weekly"]).default("monthly"),
+  amortization: z.enum(["french", "american"]).default("french"),
+  startDate: z.coerce.date().optional(),
+  accountId: z.string().length(24),
+});
+
+export const CreditPaymentInputSchema = z.object({
+  creditId: z.string().length(24),
+  installmentNumber: z.number().int().positive(),
+  accountId: z.string().length(24),
+});
+
 export const TransactionInputSchema = z.object({
   entity: z.string().length(24),
   account: z.string().length(24),
