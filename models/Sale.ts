@@ -21,6 +21,7 @@ const SaleSchema = new Schema(
     },
     items: [SaleItemSchema],
     total: { type: Number, required: true },
+    paidAmount: { type: Number, default: 0 },
     paymentMethod: {
       type: String,
       enum: ["cash", "transfer", "card", "credit"],

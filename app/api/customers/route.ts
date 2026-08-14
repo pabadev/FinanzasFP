@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
-import Sale from "@/models/Sale";
+import Customer from "@/models/Customer";
 import { connectDB } from "@/lib/db";
+import { CustomerInputSchema } from "@/lib/zodSchemas";
 import { requireEntityMembership } from "@/lib/rbac";
-import { createSale } from "@/services/saleService";
-import { SaleInputSchema } from "@/lib/zodSchemas";
+import { createCustomer } from "@/services/customerService";
 
 const QuerySchema = z.object({
   entity: z.string().length(24),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export async function GET(req: NextRequest) {
@@ -22,12 +21,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const parsed = QuerySchema.safeParse({
     entity: searchParams.get("entity") ?? undefined,
-    limit: searchParams.get("limit") ?? "50",
   });
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Parámetros inválidos" },
+      { error: "Se requiere el parámetro entity" },
       { status: 400 },
     );
   }
@@ -35,12 +33,11 @@ export async function GET(req: NextRequest) {
   await requireEntityMembership(session.user.id, parsed.data.entity);
 
   await connectDB();
-  const sales = await Sale.find({ entity: parsed.data.entity })
-    .sort({ createdAt: -1 })
-    .limit(parsed.data.limit)
-    .lean();
+  const customers = await Customer.find({
+    entity: parsed.data.entity,
+  }).sort({ name: 1 });
 
-  return NextResponse.json(sales);
+  return NextResponse.json(customers);
 }
 
 export async function POST(req: NextRequest) {
@@ -50,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const parsed = SaleInputSchema.safeParse(body);
+  const parsed = CustomerInputSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.flatten() },
@@ -59,16 +56,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const sale = await createSale({
-      entityId: parsed.data.entityId,
-      items: parsed.data.items,
-      paymentMethod: parsed.data.paymentMethod,
-      accountId: parsed.data.accountId,
-      customerId: parsed.data.customerId,
+    const customer = await createCustomer({
+      ...parsed.data,
+      email: parsed.data.email || undefined,
       userId: session.user.id,
     });
-
-    return NextResponse.json(sale, { status: 201 });
+    return NextResponse.json(customer, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       {

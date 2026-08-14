@@ -40,6 +40,20 @@ export const AccountInputSchema = z.object({
   creditLimit: z.number().int().nonnegative().optional(),
 });
 
+export const CustomerInputSchema = z.object({
+  entity: z.string().length(24),
+  name: z.string().min(2).max(120),
+  contact: z.string().max(160).optional(),
+  phone: z.string().max(40).optional(),
+  email: z.union([z.string().email().max(160), z.string().length(0)]).optional(),
+});
+
+export const SalePaymentInputSchema = z.object({
+  saleId: z.string().length(24),
+  accountId: z.string().length(24),
+  amount: z.number().int().positive(),
+});
+
 export const TransactionInputSchema = z.object({
   entity: z.string().length(24),
   account: z.string().length(24),

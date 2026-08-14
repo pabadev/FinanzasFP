@@ -1,5 +1,6 @@
 ﻿import Product from "@/models/Product";
 import Sale from "@/models/Sale";
+import Customer from "@/models/Customer";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
 import { connectDB } from "@/lib/db";
@@ -92,11 +93,13 @@ export async function createSale(params: {
     accountId = account._id.toString();
   }
 
-  const [sale] = await Sale.create([
+const [sale] = await Sale.create([
     {
       entity: params.entityId,
       items: saleItems,
       total,
+      paidAmount:
+        params.paymentMethod === "credit" ? 0 : total,
       paymentMethod: params.paymentMethod,
       account: accountId,
       customer: params.customerId,
@@ -104,6 +107,12 @@ export async function createSale(params: {
       soldBy: params.userId,
     },
   ]);
+
+  if (params.paymentMethod === "credit" && params.customerId) {
+    await Customer.findByIdAndUpdate(params.customerId, {
+      $inc: { debt: total },
+    });
+  }
 
   if (accountId) {
     await Transaction.create({
@@ -119,5 +128,68 @@ export async function createSale(params: {
   }
 
   return sale;
+}
+
+export async function registerSalePayment(params: {
+  saleId: string;
+  accountId: string;
+  amount: number;
+  userId: string;
+}) {
+  await connectDB();
+
+  const sale = await Sale.findById(params.saleId);
+  if (!sale) throw new Error("Venta no encontrada");
+
+  const entityId = sale.entity.toString();
+  await requireEntityMembership(params.userId, entityId);
+
+  if (sale.status === "paid") throw new Error("La venta ya está pagada");
+
+  if (params.amount <= 0) throw new Error("El monto debe ser positivo");
+
+  const paidSoFar = sale.paidAmount ?? 0;
+  const remaining = sale.total - paidSoFar;
+  if (params.amount > remaining)
+    throw new Error("El abono excede el saldo pendiente");
+
+  const account = await Account.findOne({
+    _id: params.accountId,
+    entity: entityId,
+    isActive: true,
+  });
+  if (!account) throw new Error("Cuenta no encontrada");
+
+  await Account.findOneAndUpdate(
+    { _id: account._id, isActive: true },
+    { $inc: { balance: params.amount } },
+  );
+
+  const newPaid = paidSoFar + params.amount;
+  const newStatus = newPaid >= sale.total ? "paid" : "partial";
+
+  await Sale.findByIdAndUpdate(params.saleId, {
+    paidAmount: newPaid,
+    status: newStatus,
+  });
+
+  if (sale.customer) {
+    await Customer.findByIdAndUpdate(sale.customer, {
+      $inc: { debt: -params.amount },
+    });
+  }
+
+  await Transaction.create({
+    entity: entityId,
+    account: account._id.toString(),
+    type: "income",
+    amount: params.amount,
+    currency: account.currency,
+    description: `Abono venta #${sale._id}`,
+    category: "venta",
+    createdBy: params.userId,
+  });
+
+  return Sale.findById(params.saleId);
 }
 
