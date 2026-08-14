@@ -25,6 +25,7 @@ interface CartItem {
   productId: string;
   name: string;
   unitPrice: number;
+  priceText: string;
   quantity: number;
 }
 
@@ -82,6 +83,7 @@ export function PosCheckout({
           productId: product._id,
           name: product.name,
           unitPrice: product.price,
+          priceText: (product.price / 100).toFixed(2),
           quantity: 1,
         },
       ];
@@ -90,11 +92,18 @@ export function PosCheckout({
   }
 
   function changeUnitPrice(productId: string, value: string) {
-    const cents = Math.round(parseFloat(value) * 100);
-    if (!Number.isFinite(cents) || cents < 0) return;
+    const parsed = parseFloat(value);
+    const cents = Math.round(parsed * 100);
+    const valid = Number.isFinite(cents) && cents >= 0;
     setCart((prev) =>
       prev.map((item) =>
-        item.productId === productId ? { ...item, unitPrice: cents } : item,
+        item.productId === productId
+          ? {
+              ...item,
+              priceText: value,
+              unitPrice: valid ? cents : item.unitPrice,
+            }
+          : item,
       ),
     );
   }
@@ -227,10 +236,9 @@ export function PosCheckout({
                   <td>{item.name}</td>
                   <td>
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={(item.unitPrice / 100).toFixed(2)}
+                      type="text"
+                      inputMode="decimal"
+                      value={item.priceText}
                       onChange={(e) =>
                         changeUnitPrice(item.productId, e.target.value)
                       }
