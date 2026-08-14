@@ -1,14 +1,15 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { requireEntityMembership } from "@/lib/rbac";
+import { formatMoney } from "@/lib/money";
 import { PosCheckout } from "@/components/pos/PosCheckout";
 import { CreateCustomerForm } from "@/components/forms/CreateCustomerForm";
 import Product from "@/models/Product";
 import Customer from "@/models/Customer";
 import Account from "@/models/Account";
+import Entity from "@/models/Entity";
 
 export default async function PosPage({
   params,
@@ -22,16 +23,18 @@ export default async function PosPage({
   await requireEntityMembership(session.user.id, businessId);
   await connectDB();
 
-  const products = await Product.find({ entity: businessId }).sort({
-    name: 1,
-  });
-  const customers = await Customer.find({ entity: businessId }).sort({
-    name: 1,
-  });
-  const accounts = await Account.find({
-    entity: businessId,
-    isActive: true,
-  }).sort({ createdAt: 1 });
+  const entity = await Entity.findById(businessId);
+  if (!entity) redirect(`/business/${businessId}`);
+
+  const currency = entity.baseCurrency ?? "USD";
+
+  const [products, customers, accounts] = await Promise.all([
+    Product.find({ entity: businessId }).sort({ name: 1 }),
+    Customer.find({ entity: businessId }).sort({ name: 1 }),
+    Account.find({ entity: businessId, isActive: true }).sort({
+      createdAt: 1,
+    }),
+  ]);
 
   const productsForForm = products.map((product) => ({
     _id: product._id.toString(),
@@ -52,16 +55,9 @@ export default async function PosPage({
   }));
 
   return (
-    <div className="dashboard-shell">
-      <header className="topbar">
-        <div>
-          <h2>POS · Negocio #{businessId}</h2>
-        </div>
-        <nav>
-          <Link href={`/business/${businessId}`}>Resumen</Link>
-          <Link href={`/business/${businessId}/pos`}>POS</Link>
-          <Link href={`/business/${businessId}/inventory`}>Inventario</Link>
-        </nav>
+    <div>
+      <header className="page-head">
+        <h2>Punto de venta</h2>
       </header>
 
       <PosCheckout
@@ -83,13 +79,9 @@ export default async function PosPage({
               <li key={customer._id.toString()}>
                 {customer.name}
                 {customer.debt ? (
-                  <span className="small-text">
+                  <span className="error-text">
                     {" "}
-                    · Deuda $
-                    {(customer.debt / 100).toLocaleString("es", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    · Deuda {formatMoney(customer.debt, currency)}
                   </span>
                 ) : null}
               </li>

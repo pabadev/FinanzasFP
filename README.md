@@ -48,9 +48,9 @@ Pendiente (ver [Roadmap](#roadmap)): **rediseño de UI/UX** (vistas menos satura
 ```
 app/
   (auth)/login, (auth)/register      # páginas públicas
-  (dashboard)/layout.tsx             # guard de autenticación de rutas
-  (dashboard)/personal/page.tsx      # dashboard personal (datos reales)
-  (dashboard)/business/[businessId]/ # resumen, pos, inventory
+  (dashboard)/layout.tsx             # guard de auth + AppShell (sidebar)
+  (dashboard)/personal/              # resumen, cuentas, creditos, negocios, configuracion
+  (dashboard)/business/[businessId]/ # resumen, pos, inventario, ventas, cuentas, creditos
   api/auth/[...nextauth]/            # handlers de Auth.js v5
   api/register, api/entities, api/accounts,
   api/transactions, api/transfers,
@@ -58,7 +58,10 @@ app/
   api/customers, api/credits, api/credits/payment,
   api/exchange-rates, api/categories        # Route Handlers
 components/
-  dashboard/  MetricCard, SignOutButton, PersonalOnboarding, CreditsPanel
+  layout/     AppShell (sidebar + nav móvil + selector de entidad)
+  dashboard/  MetricCard, SignOutButton, PersonalOnboarding, CreditsPanel,
+              AccountsPanel, MovementsPanel, TransfersPanel, CategoriesPanel,
+              SalesPanel, ReceivablesPanel, CustomersPanel, EntitiesPanel
   forms/      CreateAccountForm, CreateTransactionForm, CreateCustomerForm,
               CreateProductForm, CreateCreditForm, PayInstallmentForm,
               SalePaymentForm, CreateTransferForm, CreateCategoryForm,
@@ -191,7 +194,7 @@ npm run lint       # eslint (flat config)
 2. ✅ **Fase 3 — Créditos/préstamos**: modelo `Credit` (prestador, monto, tasa, plazo, cuotas), servicio de amortización, desembolso (`income`) y pago de cuota (`expense`) que marca cuotas pagadas.
 3. ✅ **Fase 4 — Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio.
 4. ✅ **Edición y reversión**: editar/eliminar transacciones, editar cuentas, **anular ventas** (`sale_void`), precio editable en POS, cliente en cuentas por cobrar.
-5. **Fase 5 — Rediseño de UI/UX**: vistas menos saturadas (hoy todo se muestra a la vez), navegación por **contexto** (sidebar/tabs/sub-páginas en vez de menús horizontales sobrecargados), formularios abiertos por contexto y estados vacíos amigables; app más intuitiva y visualmente agradable. Detalle en `CONTINUAR.md` §7.
+5. ✅ **Fase 5 — Rediseño de UI/UX**: `AppShell` con **sidebar lateral agrupada por contexto** (Resumen / Operación / Finanzas / Configuración) + nav móvil y selector de entidad; dashboards de **Resumen** limpios (KPIs + accesos) y páginas dedicadas por área (`cuentas`, `creditos`, `negocios`, `configuracion`, `ventas`). Paneles reutilizables en `components/dashboard/`.
 6. **Fase 6 — Cierre**: 2FA TOTP (secreto cifrado), rate limiter con Redis/Upstash (hoy en memoria, no sirve multi-instancia), auditoría completa y reversión/anulación de operaciones, mejorar CSP con nonces.
 
 ---

@@ -11,23 +11,10 @@ import {
   convertAmount,
 } from "@/services/consolidationService";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { PersonalOnboarding } from "@/components/dashboard/PersonalOnboarding";
-import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
-import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
-import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
-import { EditAccountForm } from "@/components/forms/EditAccountForm";
-import { EditTransactionForm } from "@/components/forms/EditTransactionForm";
-import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
-import { CreateCategoryForm } from "@/components/forms/CreateCategoryForm";
-import { CreateBusinessEntityForm } from "@/components/forms/CreateBusinessEntityForm";
-import { ExchangeRateForm } from "@/components/forms/ExchangeRateForm";
 import Entity from "@/models/Entity";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
-import Credit from "@/models/Credit";
-import Category from "@/models/Category";
-import ExchangeRate from "@/models/ExchangeRate";
 
 export default async function PersonalDashboardPage() {
   const session = await auth();
@@ -81,32 +68,12 @@ export default async function PersonalDashboardPage() {
 
   const recent = await Transaction.find({ entity: entityId })
     .sort({ date: -1 })
-    .limit(10);
+    .limit(5);
 
-  const credits = await Credit.find({ entity: entityId }).sort({
-    createdAt: -1,
-  });
-
-  const categories = await Category.find({ entity: entityId });
-  const exchangeRates = await ExchangeRate.find().sort({ from: 1, to: 1 });
   const { accounts: allAccounts } = await getConsolidatedAccounts(
     session.user.id,
   );
   const rates = await getExchangeRateMap();
-
-  const categoriesForForm = categories.map((category) => ({
-    name: category.name,
-    type: category.type,
-  }));
-
-  const transferAccounts = allAccounts.map((account) => ({
-    _id: account._id,
-    name: account.name,
-    entityId: account.entityId,
-    entityName: account.entityName,
-    entityType: account.entityType,
-    currency: account.currency,
-  }));
 
   const consolidated = [personalEntity, ...businessEntities].map((entity) => {
     const entityAccounts = allAccounts.filter(
@@ -140,24 +107,21 @@ export default async function PersonalDashboardPage() {
 
   const currency = personalEntity.baseCurrency ?? "USD";
 
-  const accountsForForm = accounts.map((account) => ({
-    _id: account._id.toString(),
-    name: account.name,
-  }));
-
   return (
-    <div className="dashboard-shell">
-      <header className="topbar">
-        <div>
-          <h2>Dashboard personal</h2>
+    <div>
+      <header className="page-head">
+        <h2>Mi resumen</h2>
+        <div className="page-head-actions">
+          <Link className="secondary-btn" href="/personal/cuentas">
+            Cuentas y movimientos
+          </Link>
+          <Link className="secondary-btn" href="/personal/creditos">
+            Créditos
+          </Link>
+          <Link className="secondary-btn" href="/personal/negocios">
+            Negocios
+          </Link>
         </div>
-        <nav>
-          <Link href="/personal">Personal</Link>
-          {businessEntities.length > 0 ? (
-            <Link href={`/business/${businessEntities[0]._id}`}>Negocio</Link>
-          ) : null}
-          <SignOutButton />
-        </nav>
       </header>
 
       <div className="summary-grid">
@@ -174,52 +138,36 @@ export default async function PersonalDashboardPage() {
         <MetricCard
           label="Saldo"
           value={formatMoney(balance, currency)}
-          detail="Total consolidado"
+          detail="Total de cuentas"
         />
         <MetricCard
           label="Transferencias"
           value={transfers.toString()}
-          detail="Últimos 30 días"
+          detail="Este mes"
         />
       </div>
 
-      <div className="grid-two">
+      <div className="grid-two mt">
         <section className="panel">
           <h3>Cuentas</h3>
           {accounts.length === 0 ? (
             <p className="small-text">Sin cuentas todavía.</p>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Cuenta</th>
-                  <th>Tipo</th>
-                  <th>Saldo</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => (
-                  <tr key={account._id.toString()}>
-                    <td>{account.name}</td>
-                    <td>{account.type}</td>
-                    <td>{formatMoney(account.balance ?? 0, currency)}</td>
-                    <td>
-                      <EditAccountForm
-                        accountId={account._id.toString()}
-                        initialName={account.name}
-                        initialType={account.type}
-                        initialCurrency={account.currency}
-                        initialCreditLimit={account.creditLimit ?? 0}
-                        initialIsActive={account.isActive}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ul>
+              {accounts.map((account) => (
+                <li key={account._id.toString()}>
+                  <strong>{account.name}</strong>{" "}
+                  <span>
+                    {formatMoney(account.balance ?? 0, currency)}
+                  </span>
+                  <div className="small-text">{account.type}</div>
+                </li>
+              ))}
+            </ul>
           )}
-          <CreateAccountForm entityId={entityId} />
+          <Link className="secondary-btn" href="/personal/cuentas">
+            Gestionar cuentas
+          </Link>
         </section>
 
         <section className="panel">
@@ -236,35 +184,24 @@ export default async function PersonalDashboardPage() {
                 return (
                   <li key={item._id.toString()}>
                     <strong>{item.description || item.type}</strong>{" "}
-                    <span>
+                    <span className={amount >= 0 ? "success-text" : "error-text"}>
                       {amount >= 0 ? "+" : "-"}
                       {formatMoney(Math.abs(amount), currency)}
                     </span>
                     <div className="small-text">
                       {item.category ? `${item.category} · ` : ""}
-                      {new Date(item.date ?? item.createdAt).toLocaleDateString(
-                        "es",
-                      )}
+                      {new Date(
+                        item.date ?? item.createdAt,
+                      ).toLocaleDateString("es")}
                     </div>
-                    {(item.type === "income" || item.type === "expense") && (
-                      <EditTransactionForm
-                        txId={item._id.toString()}
-                        initialAmount={item.amount}
-                        initialCategory={item.category}
-                        initialDescription={item.description}
-                        initialDate={item.date ?? item.createdAt}
-                      />
-                    )}
                   </li>
                 );
               })}
             </ul>
           )}
-          <CreateTransactionForm
-            entityId={entityId}
-            accounts={accountsForForm}
-            categories={categoriesForForm}
-          />
+          <Link className="secondary-btn" href="/personal/cuentas">
+            Ver movimientos
+          </Link>
         </section>
       </div>
 
@@ -285,7 +222,12 @@ export default async function PersonalDashboardPage() {
             <tbody>
               {consolidated.map((item) => (
                 <tr key={item._id}>
-                  <td>{item.name}</td>
+                  <td>
+                    {item.type === "business" && (
+                      <Link href={`/business/${item._id}`}>{item.name}</Link>
+                    )}
+                    {item.type === "personal" && item.name}
+                  </td>
                   <td>
                     {item.type === "personal" ? "Personal" : "Negocio"}
                   </td>
@@ -319,95 +261,6 @@ export default async function PersonalDashboardPage() {
           </table>
         )}
       </section>
-
-      <div className="grid-two mt">
-        <section className="panel">
-          <h3>Negocios</h3>
-          {businessEntities.length === 0 ? (
-            <p className="small-text">Sin negocios todavía.</p>
-          ) : (
-            <ul>
-              {businessEntities.map((business) => (
-                <li key={business._id.toString()}>
-                  <Link href={`/business/${business._id}`}>
-                    <strong>{business.name}</strong>
-                  </Link>
-                  <div className="small-text">
-                    {business.baseCurrency ?? "USD"}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <CreateBusinessEntityForm />
-        </section>
-
-        <section className="panel">
-          <h3>Transferencias</h3>
-          <p className="small-text">
-            Mueve dinero entre cuentas (misma o distinta entidad y moneda).
-          </p>
-          {transferAccounts.length > 1 ? (
-            <CreateTransferForm accounts={transferAccounts} />
-          ) : (
-            <p className="small-text">
-              Necesitas al menos dos cuentas para transferir.
-            </p>
-          )}
-        </section>
-      </div>
-
-      <div className="grid-two mt">
-        <section className="panel">
-          <h3>Categorías</h3>
-          {categories.length === 0 ? (
-            <p className="small-text">Sin categorías todavía.</p>
-          ) : (
-            <ul>
-              {categories.map((category) => (
-                <li key={category._id.toString()}>
-                  {category.name}{" "}
-                  <span className="small-text">
-                    ({category.type === "income" ? "ingreso" : "gasto"})
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <CreateCategoryForm entityId={entityId} />
-        </section>
-
-        <section className="panel">
-          <h3>Tipos de cambio</h3>
-          {exchangeRates.length === 0 ? (
-            <p className="small-text">
-              Sin tipos de cambio. Añade los pares para conversión entre
-              monedas.
-            </p>
-          ) : (
-            <ul>
-              {exchangeRates.map((rate) => (
-                <li key={`${rate.from}-${rate.to}`}>
-                  {rate.from} → {rate.to} = {rate.rate}
-                  {rate.source ? (
-                    <span className="small-text"> · {rate.source}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-          <ExchangeRateForm />
-        </section>
-      </div>
-
-      <div className="mt">
-        <CreditsPanel
-          entityId={entityId}
-          credits={credits}
-          accounts={accounts}
-          currency={currency}
-        />
-      </div>
     </div>
   );
 }

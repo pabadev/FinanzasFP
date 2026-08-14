@@ -1,11 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { requireEntityMembership } from "@/lib/rbac";
+import { formatMoney } from "@/lib/money";
 import { CreateProductForm } from "@/components/forms/CreateProductForm";
 import Product from "@/models/Product";
+import Entity from "@/models/Entity";
 
 export default async function InventoryPage({
   params,
@@ -18,6 +19,11 @@ export default async function InventoryPage({
 
   await requireEntityMembership(session.user.id, businessId);
   await connectDB();
+
+  const entity = await Entity.findById(businessId);
+  if (!entity) redirect(`/business/${businessId}`);
+
+  const currency = entity.baseCurrency ?? "USD";
 
   const products = await Product.find({ entity: businessId }).sort({
     name: 1,
@@ -51,16 +57,9 @@ export default async function InventoryPage({
     .slice(0, 10);
 
   return (
-    <div className="dashboard-shell">
-      <header className="topbar">
-        <div>
-          <h2>Inventario · Negocio #{businessId}</h2>
-        </div>
-        <nav>
-          <Link href={`/business/${businessId}`}>Resumen</Link>
-          <Link href={`/business/${businessId}/pos`}>POS</Link>
-          <Link href={`/business/${businessId}/inventory`}>Inventario</Link>
-        </nav>
+    <div>
+      <header className="page-head">
+        <h2>Inventario</h2>
       </header>
 
       {lowStock.length > 0 && (
@@ -110,11 +109,7 @@ export default async function InventoryPage({
                     <td>{product.stock ?? 0}</td>
                     <td>{product.minStock ?? 0}</td>
                     <td>
-                      $
-                      {((product.price ?? 0) / 100).toLocaleString("es", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatMoney(product.price ?? 0, currency)}
                     </td>
                     <td>
                       {product.type === "physical" ? (

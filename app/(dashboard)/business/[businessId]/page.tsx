@@ -5,25 +5,12 @@ import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { requireEntityMembership } from "@/lib/rbac";
 import { formatMoney } from "@/lib/money";
-import { getConsolidatedAccounts } from "@/services/consolidationService";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { SignOutButton } from "@/components/dashboard/SignOutButton";
-import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
-import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
-import { EditAccountForm } from "@/components/forms/EditAccountForm";
-import { EditTransactionForm } from "@/components/forms/EditTransactionForm";
-import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
-import { VoidSaleButton } from "@/components/forms/VoidSaleButton";
-import { SalePaymentForm } from "@/components/forms/SalePaymentForm";
-import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import Entity from "@/models/Entity";
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
 import Sale from "@/models/Sale";
 import Product from "@/models/Product";
-import Customer from "@/models/Customer";
-import Credit from "@/models/Credit";
-import Category from "@/models/Category";
 
 export default async function BusinessDashboardPage({
   params,
@@ -40,7 +27,7 @@ export default async function BusinessDashboardPage({
   const entity = await Entity.findById(businessId);
   if (!entity) {
     return (
-      <div className="dashboard-shell">
+      <div>
         <p>Entidad no encontrada.</p>
       </div>
     );
@@ -53,48 +40,15 @@ export default async function BusinessDashboardPage({
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [monthSales, lowStock, recent, pendingSalesAll, customers, credits, recentSales] =
-    await Promise.all([
-      Sale.find({ entity: businessId, createdAt: { $gte: monthStart } }),
-      Product.find({
-        entity: businessId,
-        type: "physical",
-        $expr: { $lte: ["$stock", "$minStock"] },
-      }),
-      Transaction.find({ entity: businessId }).sort({ date: -1 }).limit(10),
-      Sale.find({
-        entity: businessId,
-        status: { $in: ["pending", "partial"] },
-      })
-        .populate("customer", "name")
-        .sort({ createdAt: -1 })
-        .limit(20),
-      Customer.find({ entity: businessId }).sort({ name: 1 }),
-      Credit.find({ entity: businessId }).sort({ createdAt: -1 }),
-      Sale.find({ entity: businessId })
-        .populate("customer", "name")
-        .sort({ createdAt: -1 })
-        .limit(20),
-    ]);
-
-  const categories = await Category.find({ entity: businessId });
-  const { accounts: allAccounts } = await getConsolidatedAccounts(
-    session.user.id,
-  );
-
-  const categoriesForForm = categories.map((category) => ({
-    name: category.name,
-    type: category.type,
-  }));
-
-  const transferAccounts = allAccounts.map((account) => ({
-    _id: account._id,
-    name: account.name,
-    entityId: account.entityId,
-    entityName: account.entityName,
-    entityType: account.entityType,
-    currency: account.currency,
-  }));
+  const [monthSales, lowStock, recent] = await Promise.all([
+    Sale.find({ entity: businessId, createdAt: { $gte: monthStart } }),
+    Product.find({
+      entity: businessId,
+      type: "physical",
+      $expr: { $lte: ["$stock", "$minStock"] },
+    }),
+    Transaction.find({ entity: businessId }).sort({ date: -1 }).limit(5),
+  ]);
 
   const salesTotal = monthSales.reduce(
     (sum, sale) => sum + (sale.total ?? 0),
@@ -103,33 +57,27 @@ export default async function BusinessDashboardPage({
   const cashSales = monthSales.filter((s) => s.paymentMethod !== "credit");
   const pendingSales = monthSales.filter((s) => s.status !== "paid");
 
-  const accountsForForm = accounts.map((account) => ({
-    _id: account._id.toString(),
-    name: account.name,
-  }));
-
-  const pendingSalesForForm = pendingSalesAll.map((sale) => ({
-    _id: sale._id.toString(),
-    total: sale.total,
-    paidAmount: sale.paidAmount ?? 0,
-    customerName:
-      (sale.customer as unknown as { name?: string } | null)?.name ??
-      "Sin cliente",
-  }));
-
   return (
-    <div className="dashboard-shell">
-      <header className="topbar">
-        <div>
-          <h2>{entity.name}</h2>
+    <div>
+      <header className="page-head">
+        <h2>{entity.name}</h2>
+        <div className="page-head-actions">
+          <Link className="secondary-btn" href={`/business/${businessId}/pos`}>
+            Punto de venta
+          </Link>
+          <Link
+            className="secondary-btn"
+            href={`/business/${businessId}/inventario`}
+          >
+            Inventario
+          </Link>
+          <Link
+            className="secondary-btn"
+            href={`/business/${businessId}/ventas`}
+          >
+            Ventas y clientes
+          </Link>
         </div>
-        <nav>
-          <Link href="/personal">Personal</Link>
-          <Link href={`/business/${businessId}`}>Resumen</Link>
-          <Link href={`/business/${businessId}/pos`}>POS</Link>
-          <Link href={`/business/${businessId}/inventory`}>Inventario</Link>
-          <SignOutButton />
-        </nav>
       </header>
 
       <div className="summary-grid">
@@ -155,47 +103,34 @@ export default async function BusinessDashboardPage({
         />
       </div>
 
-      <div className="grid-two">
+      <div className="grid-two mt">
         <section className="panel">
           <h3>Cuentas</h3>
           {accounts.length === 0 ? (
             <p className="small-text">Sin cuentas todavía.</p>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Cuenta</th>
-                  <th>Tipo</th>
-                  <th>Saldo</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => (
-                  <tr key={account._id.toString()}>
-                    <td>{account.name}</td>
-                    <td>{account.type}</td>
-                    <td>{formatMoney(account.balance ?? 0, currency)}</td>
-                    <td>
-                      <EditAccountForm
-                        accountId={account._id.toString()}
-                        initialName={account.name}
-                        initialType={account.type}
-                        initialCurrency={account.currency}
-                        initialCreditLimit={account.creditLimit ?? 0}
-                        initialIsActive={account.isActive}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ul>
+              {accounts.map((account) => (
+                <li key={account._id.toString()}>
+                  <strong>{account.name}</strong>{" "}
+                  <span>
+                    {formatMoney(account.balance ?? 0, currency)}
+                  </span>
+                  <div className="small-text">{account.type}</div>
+                </li>
+              ))}
+            </ul>
           )}
-          <CreateAccountForm entityId={businessId} />
+          <Link
+            className="secondary-btn"
+            href={`/business/${businessId}/cuentas`}
+          >
+            Gestionar cuentas
+          </Link>
         </section>
 
         <section className="panel">
-          <h3>Movimientos recientes</h3>
+          <h3>Actividad reciente</h3>
           {recent.length === 0 ? (
             <p className="small-text">Sin movimientos todavía.</p>
           ) : (
@@ -208,183 +143,50 @@ export default async function BusinessDashboardPage({
                 return (
                   <li key={item._id.toString()}>
                     <strong>{item.description || item.type}</strong>{" "}
-                    <span>
+                    <span className={amount >= 0 ? "success-text" : "error-text"}>
                       {amount >= 0 ? "+" : "-"}
                       {formatMoney(Math.abs(amount), currency)}
                     </span>
                     <div className="small-text">
                       {item.category ? `${item.category} · ` : ""}
-                      {new Date(item.date ?? item.createdAt).toLocaleDateString(
-                        "es",
-                      )}
+                      {new Date(
+                        item.date ?? item.createdAt,
+                      ).toLocaleDateString("es")}
                     </div>
-                    {(item.type === "income" || item.type === "expense") && (
-                      <EditTransactionForm
-                        txId={item._id.toString()}
-                        initialAmount={item.amount}
-                        initialCategory={item.category}
-                        initialDescription={item.description}
-                        initialDate={item.date ?? item.createdAt}
-                      />
-                    )}
                   </li>
                 );
               })}
             </ul>
           )}
-          <CreateTransactionForm
-            entityId={businessId}
-            accounts={accountsForForm}
-            categories={categoriesForForm}
-          />
+          <Link
+            className="secondary-btn"
+            href={`/business/${businessId}/cuentas`}
+          >
+            Ver movimientos
+          </Link>
         </section>
       </div>
 
-      <section className="panel mt">
-        <h3>Transferencias</h3>
-        {transferAccounts.length > 1 ? (
-          <CreateTransferForm accounts={transferAccounts} />
-        ) : (
-          <p className="small-text">
-            Necesitas al menos dos cuentas para transferir.
-          </p>
-        )}
-      </section>
-
-      <div className="grid-two">
-        <section className="panel">
-          <h3>Cuentas por cobrar</h3>
-          {pendingSalesAll.length === 0 ? (
-            <p className="small-text">
-              Sin ventas pendientes. Las ventas a crédito aparecen aquí.
-            </p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th>Venta</th>
-                  <th>Total</th>
-                  <th>Pagado</th>
-                  <th>Pendiente</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingSalesAll.map((sale) => {
-                  const pending = sale.total - (sale.paidAmount ?? 0);
-                  const customerName =
-                    (sale.customer as unknown as { name?: string } | null)
-                      ?.name ?? "Sin cliente";
-                  return (
-                    <tr key={sale._id.toString()}>
-                      <td>{customerName}</td>
-                      <td>#{sale._id.toString().slice(-6)}</td>
-                      <td>{formatMoney(sale.total, currency)}</td>
-                      <td>{formatMoney(sale.paidAmount ?? 0, currency)}</td>
-                      <td>{formatMoney(pending, currency)}</td>
-                      <td>{sale.status}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-          {pendingSalesAll.length > 0 && (
-            <SalePaymentForm
-              pendingSales={pendingSalesForForm}
-              accounts={accountsForForm}
-            />
-          )}
+      {lowStock.length > 0 && (
+        <section className="panel mt">
+          <h3>Alertas de stock bajo</h3>
+          <ul>
+            {lowStock.map((product) => (
+              <li key={product._id.toString()}>
+                <strong>{product.name}</strong> — stock{" "}
+                <span className="error-text">{product.stock}</span> (mínimo{" "}
+                {product.minStock})
+              </li>
+            ))}
+          </ul>
+          <Link
+            className="secondary-btn"
+            href={`/business/${businessId}/inventario`}
+          >
+            Ver inventario
+          </Link>
         </section>
-
-        <section className="panel">
-          <h3>Clientes</h3>
-          {customers.length === 0 ? (
-            <p className="small-text">Sin clientes todavía.</p>
-          ) : (
-            <ul>
-              {customers.map((customer) => (
-                <li key={customer._id.toString()}>
-                  <strong>{customer.name}</strong>
-                  {customer.debt ? (
-                    <span className="error-text">
-                      {" "}
-                      · Deuda {formatMoney(customer.debt, currency)}
-                    </span>
-                  ) : (
-                    <span className="success-text"> · Al día</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <div className="mt">
-        <CreditsPanel
-          entityId={businessId}
-          credits={credits}
-          accounts={accounts}
-          currency={currency}
-        />
-      </div>
-
-      <section className="panel mt">
-        <h3>Ventas recientes</h3>
-        {recentSales.length === 0 ? (
-          <p className="small-text">Sin ventas todavía.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Total</th>
-                <th>Método</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentSales.map((sale) => {
-                const customerName =
-                  (sale.customer as unknown as { name?: string } | null)
-                    ?.name ?? "—";
-                return (
-                  <tr key={sale._id.toString()}>
-                    <td>
-                      {new Date(
-                        sale.createdAt ?? sale._id.getTimestamp(),
-                      ).toLocaleDateString("es")}
-                    </td>
-                    <td>{customerName}</td>
-                    <td>{formatMoney(sale.total, currency)}</td>
-                    <td>{sale.paymentMethod}</td>
-                    <td>
-                      {sale.status === "voided" ? (
-                        <span className="small-text">Anulada</span>
-                      ) : sale.status === "paid" ? (
-                        <span className="success-text">Pagada</span>
-                      ) : (
-                        <span className="error-text">{sale.status}</span>
-                      )}
-                    </td>
-                    <td>
-                      {sale.status !== "voided" && (
-                        <VoidSaleButton
-                          saleId={sale._id.toString()}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
+      )}
     </div>
   );
 }

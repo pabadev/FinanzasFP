@@ -91,6 +91,14 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   ajustando saldo y auditando), `PATCH /api/accounts/:id` (editar cuenta), `DELETE /api/sales/:id`
   (`sale_void`: repone stock, revierte pago/abonos, deja la deuda del cliente en cero, audita).
   En el dashboard de negocio hay sección **"Ventas recientes"** con botón **Anular** (confirmación).
+- **UI/UX rediseñada (Fase 5, iteración 1)**: `components/layout/AppShell.tsx` — **sidebar lateral
+  agrupada por contexto** (Resumen / Operación / Finanzas / Configuración) con selector de entidad
+  (Personal + Negocios), nav móvil horizontal sticky y `SignOutButton` en el footer; envuelve todo
+  el dashboard desde `(dashboard)/layout.tsx`. Dashboards reducidos a **Resumen** (KPIs + accesos)
+  y nuevas páginas dedicadas: `/personal/cuentas|creditos|negocios|configuracion` y
+  `/business/[id]/ventas|cuentas|creditos` (POS e Inventario ya existían). Paneles reutilizables en
+  `components/dashboard/` (`AccountsPanel`, `MovementsPanel`, `TransfersPanel`, `CategoriesPanel`,
+  `SalesPanel`, `ReceivablesPanel`, `CustomersPanel`, `EntitiesPanel`).
 - **POS con precio editable**: `PosCheckout` sobrescribe el precio por ítem. Fix importante: el input
   guarda el texto crudo (`priceText`) y convierte a centavos solo al calcular, porque antes
   reformateaba a `3.00` tras el primer dígito y bloqueaba escribir el resto (ej. `35000`).
@@ -121,27 +129,22 @@ Ventas/inventario (Customer, cuentas por cobrar, POS, inventario), créditos/pr�
 amortización, desembolso, pago de cuota) y consolidación (transferencias, ExchangeRate, categorías,
 balance consolidado) implementados y desplegados.
 
-### Fase 5 — Rediseño de UI/UX (PRÓXIMA — prioridad del usuario)
+### Fase 5 — Rediseño de UI/UX (EN CURSO — iteración 1 desplegada)
 Reorganizar la presentación sin tocar la lógica de datos. Objetivo: vistas limpias, menús de
 opciones agrupados por contexto, app intuitiva y visualmente agradable.
 
-1. **Inventariar la saturación actual**: listar qué se muestra en `personal/page.tsx` y
-   `business/[businessId]/page.tsx` y qué acciones/formularios conviven en cada vista.
-2. **Definir la arquitectura de navegación**: elegir entre **sidebar lateral** (secciones:
-   Resumen, Cuentas y movimientos, Ventas, Inventario, Clientes, Créditos, Transferencias,
-   Categorías, Configuración), tabs por contexto y/o sub-páginas (App Router). Evitar menús
-   horizontales sobrecargados; agrupar por contexto.
-3. **Separar lectura de creación**: los formularios de alta (cuenta, transacción, producto, cliente,
-   crédito, categoría…) dejan de estar todos visibles a la vez; se abren por contexto
-   (modal, sección plegable o página dedicada) con estados vacíos amigables.
-4. **Jerarquía visual**: KPIs destacados arriba, listas con encabezados claros, tarjetas para
-   entidades principales, estados (vacío/cargando/error) bien tratados, consistencia de colores y
-   spacing. Mantener `components/ui/button` y CSS plano actuales (sin introducir librería de UI
-   salvo decisión explícita).
-5. **Detalle de negocio**: rutas dedicadas `/business/[id]/pos`, `/inventory` ya existen; evaluar
-   separar también ventas/clientes/créditos en sub-páginas y que el dashboard sea un **resumen**
-   navegable, no el contenedor de todo.
-6. **QA visual**: probar en personal + negocio + móvil; lint y build antes de push.
+✅ **Iteración 1 (desplegada)**: AppShell con sidebar agrupada + selector de entidad + nav móvil;
+dashboards convertidos en **Resumen**; páginas dedicadas por área (personal: cuentas, creditos,
+negocios, configuracion; negocio: ventas, cuentas, creditos); paneles reutilizables.
+
+Pendiente / refinamiento UI (próxima sesión):
+1. **Paginado/búsqueda en listas largas** (movimientos, ventas, productos, créditos) — hoy `limit(10/20)`.
+2. **Modales en vez de formularios inline** en los paneles para reducir aún más la saturación.
+3. **Estados vacíos y de carga más amigables** (mensajes orientados + acciones).
+4. **Tema/consistencia**: íconos en el sidebar, tarjetas con jerarquía visual, mejorar responsive
+   (tablas con scroll horizontal en móvil).
+5. **Detalle de negocio**: alerta de stock bajo como componente reutilizable; página de **Reportes**
+   (ventas por mes, gastos por categoría) si el usuario la pide.
 
 ### Fase 6 — Cierre de seguridad
 1. **Rate limiter con Redis/Upstash** (reemplazar `lib/rateLimit.ts`; `@upstash/ratelimit` ya está
