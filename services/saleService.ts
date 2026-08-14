@@ -70,7 +70,8 @@ export async function createSale(params: {
     total += product.price * item.quantity;
   }
 
-  let accountId: string | undefined;
+let accountId: string | undefined;
+  let accountCurrency = "USD";
 
   if (params.paymentMethod !== "credit") {
     if (!params.accountId)
@@ -91,6 +92,7 @@ export async function createSale(params: {
     );
 
     accountId = account._id.toString();
+    accountCurrency = account.currency;
   }
 
 const [sale] = await Sale.create([
@@ -120,7 +122,7 @@ const [sale] = await Sale.create([
       account: accountId,
       type: "sale_payment",
       amount: total,
-      currency: "USD",
+      currency: accountCurrency,
       description: `Venta #${sale._id}`,
       category: "venta",
       createdBy: params.userId,
