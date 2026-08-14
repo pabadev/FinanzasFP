@@ -18,13 +18,14 @@ Funcional de punta a punta en el flujo de dinero básico:
 - ✅ **Transferencias** entre cuentas (débito atómico, tipos inter-entidad, conversión multi-moneda con `ExchangeRate`).
 - ✅ **Productos** (physical/service) y **ventas** con descuento atómico de inventario y métodos de pago (incl. crédito).
 - ✅ **Clientes** y **cuentas por cobrar** (`Customer`, ventas `pending|partial`, abonos que acreditan la cuenta y crean `income`).
-- ✅ **POS real** e **inventario real** (stock, alertas de mínimo, movimientos).
+- ✅ **POS real** e **inventario real** (stock, alertas de mínimo, movimientos) con **precio editable por ítem** al vender.
 - ✅ **Créditos/préstamos** (`Credit`): amortización francesa/americana, desembolso (`income`) y pago de cuota (`expense`).
+- ✅ **Edición y reversión**: editar/eliminar `income|expense` (`PATCH|DELETE /api/transactions/:id` con ajuste de saldo), editar cuentas (`PATCH /api/accounts/:id`) y **anular ventas** (`DELETE /api/sales/:id` — repone stock, revierte pago/abonos, audita).
 - ✅ **Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio, alta de entidades de negocio desde el dashboard.
 - ✅ **Dashboards** (personal y negocio) con datos reales + formularios de alta de cuentas y movimientos.
 - ✅ **Seguridad**: scoping multi-tenant (IDOR cerrado), headers de seguridad, validación zod, sin enumeración de usuarios, `npm audit` limpio.
 
-Pendiente (ver [Roadmap](#roadmap)): 2FA, rate limiter con Redis, auditoría completa con reversión/anulación, CSP con nonces.
+Pendiente (ver [Roadmap](#roadmap)): **rediseño de UI/UX** (vistas menos saturadas, menús por contexto), 2FA, rate limiter con Redis, auditoría completa, CSP con nonces.
 
 ---
 
@@ -62,7 +63,7 @@ components/
               CreateProductForm, CreateCreditForm, PayInstallmentForm,
               SalePaymentForm, CreateTransferForm, CreateCategoryForm,
               CreateBusinessEntityForm, ExchangeRateForm, EditAccountForm,
-              EditTransactionForm
+              EditTransactionForm, VoidSaleButton
   pos/        PosCheckout
   ui/         button
 lib/
@@ -189,7 +190,9 @@ npm run lint       # eslint (flat config)
 1. ✅ **Fase 2 — Ventas e inventario reales**: modelo `Customer` + cuentas por cobrar (abonos, `status: partial`), POS e inventario conectados a `/api/sales` y `/api/products`, alertas de stock mínimo.
 2. ✅ **Fase 3 — Créditos/préstamos**: modelo `Credit` (prestador, monto, tasa, plazo, cuotas), servicio de amortización, desembolso (`income`) y pago de cuota (`expense`) que marca cuotas pagadas.
 3. ✅ **Fase 4 — Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio.
-4. **Fase 5 — Cierre**: 2FA TOTP (secreto cifrado), rate limiter con Redis/Upstash (hoy en memoria, no sirve multi-instancia), auditoría completa y reversión/anulación de operaciones, mejorar CSP con nonces.
+4. ✅ **Edición y reversión**: editar/eliminar transacciones, editar cuentas, **anular ventas** (`sale_void`), precio editable en POS, cliente en cuentas por cobrar.
+5. **Fase 5 — Rediseño de UI/UX**: vistas menos saturadas (hoy todo se muestra a la vez), navegación por **contexto** (sidebar/tabs/sub-páginas en vez de menús horizontales sobrecargados), formularios abiertos por contexto y estados vacíos amigables; app más intuitiva y visualmente agradable. Detalle en `CONTINUAR.md` §7.
+6. **Fase 6 — Cierre**: 2FA TOTP (secreto cifrado), rate limiter con Redis/Upstash (hoy en memoria, no sirve multi-instancia), auditoría completa y reversión/anulación de operaciones, mejorar CSP con nonces.
 
 ---
 

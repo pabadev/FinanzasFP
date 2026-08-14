@@ -87,19 +87,32 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   `CreateAccountForm`, `CreateTransactionForm`, `CreateProductForm`, `CreateCustomerForm`,
   `CreateCreditForm`, `PayInstallmentForm`, `SalePaymentForm`, `CreateTransferForm`,
   `CreateCategoryForm`, `CreateBusinessEntityForm`, `ExchangeRateForm`.
+- **Edición y reversión**: `PATCH|DELETE /api/transactions/:id` (editar/eliminar `income|expense`
+  ajustando saldo y auditando), `PATCH /api/accounts/:id` (editar cuenta), `DELETE /api/sales/:id`
+  (`sale_void`: repone stock, revierte pago/abonos, deja la deuda del cliente en cero, audita).
+  En el dashboard de negocio hay sección **"Ventas recientes"** con botón **Anular** (confirmación).
+- **POS con precio editable**: `PosCheckout` sobrescribe el precio por ítem. Fix importante: el input
+  guarda el texto crudo (`priceText`) y convierte a centavos solo al calcular, porque antes
+  reformateaba a `3.00` tras el primer dígito y bloqueaba escribir el resto (ej. `35000`).
+- **Cuentas por cobrar**: el panel de abonos muestra el nombre del cliente (select con nombres).
 - **Seguridad aplicada**: headers (CSP, X-Frame-Options…), scoping IDOR, rol real, sin enumeración
   de usuarios, rate limiting en login/register (en memoria), `npm audit` = 0 vulnerabilidades.
 
 ## 6. Pendiente / limitaciones conocidas
 
+- **UI/UX — PRIORITARIO (solicitud explícita del usuario)**: los dashboards están **saturados**
+  (todo se muestra al mismo tiempo: cuentas, KPIs, actividad, ventas, stock bajo, cuentas por cobrar,
+  créditos, transferencias, categorías + todos los formularios de alta). Se quiere una **UI más
+  limpia y moderna**: menús de opciones bien organizados y **agrupados por contexto** (no
+  necesariamente menús horizontales; se puede usar navegación lateral/sidebar, tabs, tarjetas y
+  sub-secciones por área), para que la app sea más **intuitiva, fluida y visualmente agradable**.
+  No se pide cambiar lógica de datos: reorganizar y jerarquizar la presentación.
 - **Rate limiter en memoria** (`lib/rateLimit.ts`): en Vercel (serverless) cada instancia tiene su
   propio store → migrar a Redis/@upstash antes de producción real.
 - **2FA**: campos `twoFactorSecret`/`twoFactorEnabled` en `User` sin implementar; si se activa,
   cifrar el secreto (AES-256-GCM) — hoy iría en texto plano.
 - CSP con `'unsafe-inline'` (necesario para Next; endurecer con nonces si se quiere).
-- Reversión: `income`/`expense` manuales se editan/eliminan (`PATCH|DELETE /api/transactions/:id`),
-  cuentas se editan (`PATCH /api/accounts/:id`) y ventas se anulan (`DELETE /api/sales/:id`, `sale_void`:
-  repone stock, revierte pago/abonos). Falta ajuste manual de saldo auditado desde UI.
+- Falta ajuste manual de saldo auditado desde UI (`manual_balance_adjustment`).
 
 ## 7. PASOS A SEGUIR (en orden)
 
@@ -108,11 +121,33 @@ Ventas/inventario (Customer, cuentas por cobrar, POS, inventario), créditos/pr�
 amortización, desembolso, pago de cuota) y consolidación (transferencias, ExchangeRate, categorías,
 balance consolidado) implementados y desplegados.
 
-### Fase 5 — Cierre de seguridad
+### Fase 5 — Rediseño de UI/UX (PRÓXIMA — prioridad del usuario)
+Reorganizar la presentación sin tocar la lógica de datos. Objetivo: vistas limpias, menús de
+opciones agrupados por contexto, app intuitiva y visualmente agradable.
+
+1. **Inventariar la saturación actual**: listar qué se muestra en `personal/page.tsx` y
+   `business/[businessId]/page.tsx` y qué acciones/formularios conviven en cada vista.
+2. **Definir la arquitectura de navegación**: elegir entre **sidebar lateral** (secciones:
+   Resumen, Cuentas y movimientos, Ventas, Inventario, Clientes, Créditos, Transferencias,
+   Categorías, Configuración), tabs por contexto y/o sub-páginas (App Router). Evitar menús
+   horizontales sobrecargados; agrupar por contexto.
+3. **Separar lectura de creación**: los formularios de alta (cuenta, transacción, producto, cliente,
+   crédito, categoría…) dejan de estar todos visibles a la vez; se abren por contexto
+   (modal, sección plegable o página dedicada) con estados vacíos amigables.
+4. **Jerarquía visual**: KPIs destacados arriba, listas con encabezados claros, tarjetas para
+   entidades principales, estados (vacío/cargando/error) bien tratados, consistencia de colores y
+   spacing. Mantener `components/ui/button` y CSS plano actuales (sin introducir librería de UI
+   salvo decisión explícita).
+5. **Detalle de negocio**: rutas dedicadas `/business/[id]/pos`, `/inventory` ya existen; evaluar
+   separar también ventas/clientes/créditos en sub-páginas y que el dashboard sea un **resumen**
+   navegable, no el contenedor de todo.
+6. **QA visual**: probar en personal + negocio + móvil; lint y build antes de push.
+
+### Fase 6 — Cierre de seguridad
 1. **Rate limiter con Redis/Upstash** (reemplazar `lib/rateLimit.ts`; `@upstash/ratelimit` ya está
    en `package.json`).
 2. **2FA TOTP** con `otplib` (ya instalado) + secreto cifrado AES-256-GCM.
-3. Auditoría completa: `sale_void`, `manual_balance_adjustment`, reversión/anulación de operaciones.
+3. Auditoría completa: `manual_balance_adjustment` desde UI, reversión/anulación de operaciones.
 4. Endurecer CSP (nonces) y revisar RBAC por rol en servicios (`cashier` vs `accountant`).
 
 ## 8. Cómo probar (recordatorio)
