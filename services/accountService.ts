@@ -22,6 +22,36 @@ export async function createAccount(params: {
   });
 }
 
+export async function updateAccount(params: {
+  accountId: string;
+  name?: string;
+  type?: "bank" | "cash" | "credit_card" | "wallet";
+  currency?: string;
+  creditLimit?: number | null;
+  isActive?: boolean;
+  userId: string;
+}) {
+  await connectDB();
+
+  const account = await Account.findById(params.accountId);
+  if (!account) throw new Error("Cuenta no encontrada");
+
+  const entityId = account.entity.toString();
+  await requireRole(params.userId, ["owner", "admin", "accountant"], entityId);
+
+  const update: Record<string, unknown> = {};
+  if (params.name !== undefined) update.name = params.name;
+  if (params.type !== undefined) update.type = params.type;
+  if (params.currency !== undefined) update.currency = params.currency;
+  if (params.creditLimit !== undefined)
+    update.creditLimit = params.creditLimit ?? 0;
+  if (params.isActive !== undefined) update.isActive = params.isActive;
+
+  await Account.findByIdAndUpdate(params.accountId, update);
+
+  return Account.findById(params.accountId);
+}
+
 export async function ensureDefaultAccount(entityId: string) {
   await connectDB();
   const exists = await Account.findOne({

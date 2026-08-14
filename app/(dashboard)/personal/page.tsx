@@ -16,6 +16,8 @@ import { PersonalOnboarding } from "@/components/dashboard/PersonalOnboarding";
 import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
+import { EditAccountForm } from "@/components/forms/EditAccountForm";
+import { EditTransactionForm } from "@/components/forms/EditTransactionForm";
 import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
 import { CreateCategoryForm } from "@/components/forms/CreateCategoryForm";
 import { CreateBusinessEntityForm } from "@/components/forms/CreateBusinessEntityForm";
@@ -193,6 +195,7 @@ export default async function PersonalDashboardPage() {
                   <th>Cuenta</th>
                   <th>Tipo</th>
                   <th>Saldo</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -201,6 +204,16 @@ export default async function PersonalDashboardPage() {
                     <td>{account.name}</td>
                     <td>{account.type}</td>
                     <td>{formatMoney(account.balance ?? 0, currency)}</td>
+                    <td>
+                      <EditAccountForm
+                        accountId={account._id.toString()}
+                        initialName={account.name}
+                        initialType={account.type}
+                        initialCurrency={account.currency}
+                        initialCreditLimit={account.creditLimit ?? 0}
+                        initialIsActive={account.isActive}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -233,6 +246,15 @@ export default async function PersonalDashboardPage() {
                         "es",
                       )}
                     </div>
+                    {(item.type === "income" || item.type === "expense") && (
+                      <EditTransactionForm
+                        txId={item._id.toString()}
+                        initialAmount={item.amount}
+                        initialCategory={item.category}
+                        initialDescription={item.description}
+                        initialDate={item.date ?? item.createdAt}
+                      />
+                    )}
                   </li>
                 );
               })}

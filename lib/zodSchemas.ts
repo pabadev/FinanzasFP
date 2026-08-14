@@ -7,12 +7,28 @@ export const SaleInputSchema = z.object({
       z.object({
         productId: z.string().length(24),
         quantity: z.number().int().positive().max(10000),
+        unitPrice: z.number().int().nonnegative().optional(),
       }),
     )
     .min(1),
   paymentMethod: z.enum(["cash", "transfer", "card", "credit"]),
   accountId: z.string().length(24).optional(),
   customerId: z.string().length(24).optional(),
+});
+
+export const TransactionUpdateSchema = z.object({
+  amount: z.number().int().positive().optional(),
+  category: z.string().min(1).max(80).nullable().optional(),
+  description: z.string().max(280).nullable().optional(),
+  date: z.coerce.date().optional(),
+});
+
+export const AccountUpdateSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  type: z.enum(["bank", "cash", "credit_card", "wallet"]).optional(),
+  currency: z.string().length(3).optional(),
+  creditLimit: z.number().int().nonnegative().nullable().optional(),
+  isActive: z.boolean().optional(),
 });
 
 export const ProductInputSchema = z.object({

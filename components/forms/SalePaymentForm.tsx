@@ -7,6 +7,7 @@ interface PendingSale {
   _id: string;
   total: number;
   paidAmount: number;
+  customerName: string;
 }
 
 interface AccountOption {
@@ -100,7 +101,7 @@ export function SalePaymentForm({
               >
                 {pendingSales.map((sale) => (
                   <option key={sale._id} value={sale._id}>
-                    #{sale._id} — pendiente $
+                    {sale.customerName} · #{sale._id.slice(-6)} — pendiente $
                     {((sale.total - (sale.paidAmount ?? 0)) / 100).toLocaleString(
                       "es",
                       {

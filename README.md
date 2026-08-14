@@ -61,7 +61,8 @@ components/
   forms/      CreateAccountForm, CreateTransactionForm, CreateCustomerForm,
               CreateProductForm, CreateCreditForm, PayInstallmentForm,
               SalePaymentForm, CreateTransferForm, CreateCategoryForm,
-              CreateBusinessEntityForm, ExchangeRateForm
+              CreateBusinessEntityForm, ExchangeRateForm, EditAccountForm,
+              EditTransactionForm
   pos/        PosCheckout
   ui/         button
 lib/
@@ -116,10 +117,13 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/accounts` | POST | Crea cuenta (rol owner/admin/accountant) |
 | `/api/transactions?entity=&account=&limit=` | GET | Ledger ordenado por fecha |
 | `/api/transactions` | POST | `income`/`expense` con saldo atómico (expense exige fondos) |
+| `/api/transactions/:id` | PATCH | Edita `income`/`expense` (ajusta saldo por la diferencia, audita) |
+| `/api/transactions/:id` | DELETE | Elimina `income`/`expense` (revierte saldo, audita) |
+| `/api/accounts/:id` | PATCH | Edita cuenta (nombre, tipo, moneda, límite, activa) |
 | `/api/transfers` | POST | Transferencia entre cuentas (atómica; conversión multi-moneda vía `ExchangeRate`) |
 | `/api/products?entity=` | GET | Lista productos de la entidad |
 | `/api/products` | POST | Crea producto |
-| `/api/sales` | POST | Crea venta (descuenta stock atómico, ledger `sale_payment`) |
+| `/api/sales` | POST | Crea venta (descuenta stock atómico, ledger `sale_payment`; `unitPrice` opcional por ítem) |
 | `/api/sales` | GET | Lista ventas de la entidad |
 | `/api/sales/payment` | POST | Abono a venta a crédito (acredita cuenta, `income`, actualiza status) |
 | `/api/customers?entity=` | GET | Lista clientes de la entidad |

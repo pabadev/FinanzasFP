@@ -9,6 +9,7 @@ const AuditLogSchema = new Schema(
       required: true,
       enum: [
         "delete",
+        "edit",
         "manual_balance_adjustment",
         "transfer",
         "role_change",

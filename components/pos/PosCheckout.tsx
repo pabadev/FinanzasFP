@@ -24,7 +24,7 @@ interface AccountOption {
 interface CartItem {
   productId: string;
   name: string;
-  price: number;
+  unitPrice: number;
   quantity: number;
 }
 
@@ -50,7 +50,10 @@ export function PosCheckout({
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = cart.reduce(
+    (sum, item) => sum + item.unitPrice * item.quantity,
+    0,
+  );
 
   function addToCart(product: ProductOption) {
     setCart((prev) => {
@@ -78,12 +81,22 @@ export function PosCheckout({
         {
           productId: product._id,
           name: product.name,
-          price: product.price,
+          unitPrice: product.price,
           quantity: 1,
         },
       ];
     });
     setError("");
+  }
+
+  function changeUnitPrice(productId: string, value: string) {
+    const cents = Math.round(parseFloat(value) * 100);
+    if (!Number.isFinite(cents) || cents < 0) return;
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, unitPrice: cents } : item,
+      ),
+    );
   }
 
   function changeQuantity(productId: string, delta: number) {
@@ -202,6 +215,7 @@ export function PosCheckout({
             <thead>
               <tr>
                 <th>Producto</th>
+                <th>Precio</th>
                 <th>Cant.</th>
                 <th>Total</th>
                 <th></th>
@@ -211,6 +225,18 @@ export function PosCheckout({
               {cart.map((item) => (
                 <tr key={item.productId}>
                   <td>{item.name}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={(item.unitPrice / 100).toFixed(2)}
+                      onChange={(e) =>
+                        changeUnitPrice(item.productId, e.target.value)
+                      }
+                      style={{ width: "110px" }}
+                    />
+                  </td>
                   <td>
                     <button
                       type="button"
@@ -230,10 +256,13 @@ export function PosCheckout({
                   </td>
                   <td>
                     $
-                    {((item.price * item.quantity) / 100).toLocaleString("es", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {((item.unitPrice * item.quantity) / 100).toLocaleString(
+                      "es",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}
                   </td>
                   <td>
                     <button

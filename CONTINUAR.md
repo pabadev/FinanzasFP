@@ -97,7 +97,9 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
 - **2FA**: campos `twoFactorSecret`/`twoFactorEnabled` en `User` sin implementar; si se activa,
   cifrar el secreto (AES-256-GCM) — hoy iría en texto plano.
 - CSP con `'unsafe-inline'` (necesario para Next; endurecer con nonces si se quiere).
-- Auditoría/reversión: sin anulación de operaciones ni ajustes de saldo auditados desde UI.
+- Reversión parcial: los `income`/`expense` manuales se editan/eliminan con ajuste de saldo + audit
+  (`PATCH|DELETE /api/transactions/:id`), y las cuentas se editan (`PATCH /api/accounts/:id`).
+  Falta anular ventas (sale_void) y ajustes manuales de saldo desde UI.
 
 ## 7. PASOS A SEGUIR (en orden)
 

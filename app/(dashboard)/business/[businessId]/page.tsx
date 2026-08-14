@@ -10,6 +10,8 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
+import { EditAccountForm } from "@/components/forms/EditAccountForm";
+import { EditTransactionForm } from "@/components/forms/EditTransactionForm";
 import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
 import { SalePaymentForm } from "@/components/forms/SalePaymentForm";
 import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
@@ -59,7 +61,11 @@ export default async function BusinessDashboardPage({
         $expr: { $lte: ["$stock", "$minStock"] },
       }),
       Transaction.find({ entity: businessId }).sort({ date: -1 }).limit(10),
-      Sale.find({ entity: businessId, status: { $in: ["pending", "partial"] } })
+      Sale.find({
+        entity: businessId,
+        status: { $in: ["pending", "partial"] },
+      })
+        .populate("customer", "name")
         .sort({ createdAt: -1 })
         .limit(20),
       Customer.find({ entity: businessId }).sort({ name: 1 }),
@@ -101,6 +107,9 @@ export default async function BusinessDashboardPage({
     _id: sale._id.toString(),
     total: sale.total,
     paidAmount: sale.paidAmount ?? 0,
+    customerName:
+      (sale.customer as unknown as { name?: string } | null)?.name ??
+      "Sin cliente",
   }));
 
   return (
@@ -153,6 +162,7 @@ export default async function BusinessDashboardPage({
                   <th>Cuenta</th>
                   <th>Tipo</th>
                   <th>Saldo</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -161,6 +171,16 @@ export default async function BusinessDashboardPage({
                     <td>{account.name}</td>
                     <td>{account.type}</td>
                     <td>{formatMoney(account.balance ?? 0, currency)}</td>
+                    <td>
+                      <EditAccountForm
+                        accountId={account._id.toString()}
+                        initialName={account.name}
+                        initialType={account.type}
+                        initialCurrency={account.currency}
+                        initialCreditLimit={account.creditLimit ?? 0}
+                        initialIsActive={account.isActive}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -193,6 +213,15 @@ export default async function BusinessDashboardPage({
                         "es",
                       )}
                     </div>
+                    {(item.type === "income" || item.type === "expense") && (
+                      <EditTransactionForm
+                        txId={item._id.toString()}
+                        initialAmount={item.amount}
+                        initialCategory={item.category}
+                        initialDescription={item.description}
+                        initialDate={item.date ?? item.createdAt}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -228,6 +257,7 @@ export default async function BusinessDashboardPage({
             <table className="table">
               <thead>
                 <tr>
+                  <th>Cliente</th>
                   <th>Venta</th>
                   <th>Total</th>
                   <th>Pagado</th>
@@ -237,10 +267,13 @@ export default async function BusinessDashboardPage({
               </thead>
               <tbody>
                 {pendingSalesAll.map((sale) => {
-                  const pending =
-                    sale.total - (sale.paidAmount ?? 0);
+                  const pending = sale.total - (sale.paidAmount ?? 0);
+                  const customerName =
+                    (sale.customer as unknown as { name?: string } | null)
+                      ?.name ?? "Sin cliente";
                   return (
                     <tr key={sale._id.toString()}>
+                      <td>{customerName}</td>
                       <td>#{sale._id.toString().slice(-6)}</td>
                       <td>{formatMoney(sale.total, currency)}</td>
                       <td>{formatMoney(sale.paidAmount ?? 0, currency)}</td>

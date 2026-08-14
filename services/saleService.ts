@@ -9,6 +9,7 @@ import { requireEntityMembership } from "@/lib/rbac";
 interface SaleItemInput {
   productId: string;
   quantity: number;
+  unitPrice?: number;
 }
 
 export async function createSale(params: {
@@ -59,15 +60,18 @@ export async function createSale(params: {
       );
     }
 
+const unitPrice = item.unitPrice ?? product.price;
+    if (unitPrice < 0) throw new Error("Precio inválido");
+
     saleItems.push({
       product: product._id.toString(),
       name: product.name,
       quantity: item.quantity,
-      unitPrice: product.price,
+      unitPrice,
       isService: product.type === "service",
     });
 
-    total += product.price * item.quantity;
+    total += unitPrice * item.quantity;
   }
 
 let accountId: string | undefined;
