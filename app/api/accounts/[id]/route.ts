@@ -18,7 +18,12 @@ export async function PATCH(
   const parsed = AccountUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.flatten() },
+      {
+        error:
+          Object.values(parsed.error.flatten().fieldErrors)
+            .flat()
+            .join(", ") || "Datos inválidos",
+      },
       { status: 400 },
     );
   }

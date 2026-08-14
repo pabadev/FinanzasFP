@@ -43,7 +43,12 @@ export async function POST(request: Request) {
   const parsed = RegisterSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.flatten() },
+      {
+        error:
+          Object.values(parsed.error.flatten().fieldErrors)
+            .flat()
+            .join(", ") || "Datos inválidos",
+      },
       { status: 400 },
     );
   }

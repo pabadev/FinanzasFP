@@ -29,7 +29,9 @@ export function PayInstallmentForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [creditId, setCreditId] = useState(credits[0]?._id ?? "");
-  const [installmentNumber, setInstallmentNumber] = useState<number | "">("");
+  const [installmentNumber, setInstallmentNumber] = useState<number | "">(
+    credits[0]?.installments.find((i) => !i.paid)?.number ?? "",
+  );
   const [accountId, setAccountId] = useState(accounts[0]?._id ?? "");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -53,6 +55,12 @@ export function PayInstallmentForm({
     setLoading(true);
     setError("");
     setSuccess("");
+
+    if (installmentNumber === "") {
+      setError("Selecciona la cuota a pagar");
+      setLoading(false);
+      return;
+    }
 
     const res = await fetch("/api/credits/payment", {
       method: "POST",
