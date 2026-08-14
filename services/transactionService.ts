@@ -1,6 +1,7 @@
 import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
 import AuditLog from "@/models/AuditLog";
+import Credit from "@/models/Credit";
 import { connectDB } from "@/lib/db";
 import { requireEntityMembership, requireRole } from "@/lib/rbac";
 
@@ -90,6 +91,15 @@ export async function updateTransaction(params: {
     throw new Error("Solo se pueden editar ingresos y gastos manuales");
   }
 
+  const linkedCredit = await Credit.findOne({
+    "installments.transaction": params.txId,
+  });
+  if (linkedCredit) {
+    throw new Error(
+      "No se puede editar: este movimiento es el pago de una cuota de crédito. Elimínalo para revertir la cuota.",
+    );
+  }
+
   const account = await Account.findOne({
     _id: accountId,
     entity: entityId,
@@ -167,6 +177,16 @@ export async function deleteTransaction(params: {
     throw new Error("Solo se pueden eliminar ingresos y gastos manuales");
   }
 
+  const description = tx.description ?? "";
+  if (
+    description.startsWith("Desembolso crédito - ") ||
+    description.startsWith("Crédito otorgado - ")
+  ) {
+    throw new Error(
+      "No se puede eliminar: este movimiento es el desembolso de un crédito. Las cuotas y el saldo están vinculados a ese crédito.",
+    );
+  }
+
   if (tx.type === "income") {
     const updated = await Account.findOneAndUpdate(
       { _id: accountId, isActive: true, balance: { $gte: tx.amount } },
@@ -182,6 +202,35 @@ export async function deleteTransaction(params: {
       { _id: accountId, isActive: true },
       { $inc: { balance: tx.amount } },
     );
+  }
+
+  const linkedCredit = await Credit.findOne({
+    "installments.transaction": params.txId,
+  });
+  if (linkedCredit) {
+    await Credit.updateOne(
+      { _id: linkedCredit._id, "installments.transaction": params.txId },
+      {
+        $set: {
+          "installments.$.paid": false,
+          "installments.$.paidDate": null,
+          "installments.$.transaction": null,
+        },
+      },
+    );
+
+    const updatedCredit = await Credit.findById(linkedCredit._id);
+    if (updatedCredit) {
+      const hasUnpaid = updatedCredit.installments.some(
+        (inst: { paid: boolean }) => !inst.paid,
+      );
+      const targetStatus = hasUnpaid ? "active" : "paid";
+      if (updatedCredit.status !== targetStatus) {
+        await Credit.findByIdAndUpdate(updatedCredit._id, {
+          status: targetStatus,
+        });
+      }
+    }
   }
 
   await Transaction.findByIdAndDelete(params.txId);
