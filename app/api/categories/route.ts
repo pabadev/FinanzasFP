@@ -5,10 +5,9 @@ import { auth } from "@/lib/auth";
 import Category from "@/models/Category";
 import { connectDB } from "@/lib/db";
 import { CategoryInputSchema } from "@/lib/zodSchemas";
-import { requireEntityMembership } from "@/lib/rbac";
 
 const QuerySchema = z.object({
-  entity: z.string().length(24),
+  type: z.enum(["income", "expense"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -19,22 +18,23 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const parsed = QuerySchema.safeParse({
-    entity: searchParams.get("entity") ?? undefined,
+    type: searchParams.get("type") ?? undefined,
   });
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Se requiere el parámetro entity" },
+      { error: "Parámetro type inválido" },
       { status: 400 },
     );
   }
 
-  await requireEntityMembership(session.user.id, parsed.data.entity);
-
   await connectDB();
-  const categories = await Category.find({
-    entity: parsed.data.entity,
-  }).sort({ type: 1, name: 1 });
+  const filter: { user: string; type?: string } = {
+    user: session.user.id,
+  };
+  if (parsed.data.type) filter.type = parsed.data.type;
+
+  const categories = await Category.find(filter).sort({ type: 1, name: 1 });
 
   return NextResponse.json(categories);
 }
@@ -55,11 +55,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await requireEntityMembership(session.user.id, parsed.data.entity);
-
     await connectDB();
     const category = await Category.create({
-      entity: parsed.data.entity,
+      user: session.user.id,
       name: parsed.data.name.trim(),
       type: parsed.data.type,
     });

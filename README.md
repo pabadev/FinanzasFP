@@ -100,7 +100,7 @@ middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 - **Customer**: entity, name, contact, phone, email, debt.
 - **Credit**: entity, lender, direction (`incoming|outgoing`), amount, currency, rate, term, frequency (`monthly|biweekly|weekly`), amortization (`french|american`), installments[] (number, dueDate, principal, interest, total, paid), status (`active|paid|cancelled`).
 - **ExchangeRate**: from, to (único `from+to`), rate, source.
-- **Category**: entity, name (único por entidad), type (`income|expense`).
+- **Category**: user (global por usuario, NO por entidad), name, type (`income|expense`). Único `user+name+type`.
 - **AuditLog**: append-only, action (`delete|manual_balance_adjustment|transfer|role_change|sale_void`), before/after, ip.
 
 Índices compuestos en `entity+date` para Transaction y `entity+sku` (unique) para Product.
@@ -138,8 +138,8 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/credits/payment` | POST | Paga cuota (marca pagada, crea `Transaction`) |
 | `/api/exchange-rates` | GET | Lista tipos de cambio |
 | `/api/exchange-rates` | POST | Crea/actualiza tipo de cambio (upsert por par) |
-| `/api/categories?entity=` | GET | Lista categorías de la entidad |
-| `/api/categories` | POST | Crea categoría |
+| `/api/categories` | GET | Lista categorías del usuario (globales; `?type=` opcional) |
+| `/api/categories` | POST | Crea categoría del usuario (`income|expense`) |
 
 ---
 

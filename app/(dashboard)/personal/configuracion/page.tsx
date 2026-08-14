@@ -23,10 +23,8 @@ export default async function PersonalConfigPage() {
 
   if (!personalEntity) redirect("/personal");
 
-  const entityId = personalEntity._id.toString();
-
   const [categories, exchangeRates] = await Promise.all([
-    Category.find({ entity: entityId }),
+    Category.find({ user: session.user.id }),
     ExchangeRate.find().sort({ from: 1, to: 1 }),
   ]);
 
@@ -37,7 +35,6 @@ export default async function PersonalConfigPage() {
       </header>
       <div className="grid-two">
         <CategoriesPanel
-          entityId={entityId}
           categories={categories.map((category) => ({
             name: category.name,
             type: category.type,

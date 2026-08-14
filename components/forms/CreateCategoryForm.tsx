@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function CreateCategoryForm({ entityId }: { entityId: string }) {
+export function CreateCategoryForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -19,7 +19,7 @@ export function CreateCategoryForm({ entityId }: { entityId: string }) {
     const res = await fetch("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entity: entityId, name, type }),
+      body: JSON.stringify({ name, type }),
     });
 
     const data = await res.json();

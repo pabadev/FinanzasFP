@@ -34,7 +34,7 @@ export default async function BusinessAccountsPage({
     await Promise.all([
       Account.find({ entity: businessId, isActive: true }),
       Transaction.find({ entity: businessId }).sort({ date: -1 }).limit(10),
-      Category.find({ entity: businessId }),
+      Category.find({ user: session.user.id }),
       getConsolidatedAccounts(session.user.id),
     ]);
 
@@ -93,10 +93,7 @@ export default async function BusinessAccountsPage({
       </div>
       <div className="grid-two mt">
         <TransfersPanel transferAccounts={transferAccounts} />
-        <CategoriesPanel
-          entityId={businessId}
-          categories={categoriesForForm}
-        />
+        <CategoriesPanel categories={categoriesForForm} />
       </div>
     </div>
   );

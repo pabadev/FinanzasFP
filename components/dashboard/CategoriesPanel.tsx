@@ -5,13 +5,7 @@ export interface CategoryRow {
   type: string;
 }
 
-export function CategoriesPanel({
-  entityId,
-  categories,
-}: {
-  entityId: string;
-  categories: CategoryRow[];
-}) {
+export function CategoriesPanel({ categories }: { categories: CategoryRow[] }) {
   return (
     <section className="panel">
       <h3>Categorías</h3>
@@ -29,7 +23,7 @@ export function CategoriesPanel({
           ))}
         </ul>
       )}
-      <CreateCategoryForm entityId={entityId} />
+      <CreateCategoryForm />
     </section>
   );
 }

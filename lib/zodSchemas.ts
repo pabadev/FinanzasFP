@@ -98,7 +98,6 @@ export const ExchangeRateInputSchema = z.object({
 });
 
 export const CategoryInputSchema = z.object({
-  entity: z.string().length(24),
   name: z.string().min(2).max(80),
   type: z.enum(["income", "expense"]),
 });

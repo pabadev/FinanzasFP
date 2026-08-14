@@ -68,7 +68,11 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   - `GET|POST /api/credits?entity=` — listar / crear créditos (desembolso + amortización).
   - `POST /api/credits/payment` — pagar cuota (marca pagada + `Transaction`).
   - `GET|POST /api/exchange-rates` — tipos de cambio (upsert por par, conversión multi-moneda).
-  - `GET|POST /api/categories?entity=` — categorías configurables (income|expense).
+  - **Categorías GLOBALES por usuario** (decisión del usuario): ya no son por entidad. `models/Category.ts`
+  usa `user` (índice único `user+name+type`); `GET|POST /api/categories` operan sobre el usuario de la
+  sesión. Una categoría creada en un negocio aparece y se usa en personal y en todos los negocios.
+  Migración one-off aplicada: `node scripts/migrate-global-categories.mjs` (convierte `entity`→`user`
+  usando el `ownerUser` de la entidad, deduplica y elimina el índice viejo `entity_1_name_1`).
   - `POST /api/register` — con rate limit (5/min por IP) y validación de password ≥8.
 - **POS real e inventario real**: `pos/page.tsx` con `PosCheckout` (consumo de `/api/products` y `/api/sales`),
   `inventory/page.tsx` con `CreateProductForm`, movimientos de stock y alertas de mínimo.

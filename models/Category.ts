@@ -2,9 +2,9 @@ import { Schema, model, models, Types } from "mongoose";
 
 const CategorySchema = new Schema(
   {
-    entity: {
+    user: {
       type: Types.ObjectId,
-      ref: "Entity",
+      ref: "User",
       required: true,
       index: true,
     },
@@ -14,6 +14,6 @@ const CategorySchema = new Schema(
   { timestamps: true },
 );
 
-CategorySchema.index({ entity: 1, name: 1 }, { unique: true });
+CategorySchema.index({ user: 1, name: 1, type: 1 }, { unique: true });
 
 export default models.Category || model("Category", CategorySchema);

@@ -33,7 +33,7 @@ export default async function PersonalAccountsPage() {
   const recent = await Transaction.find({ entity: entityId })
     .sort({ date: -1 })
     .limit(10);
-  const categories = await Category.find({ entity: entityId });
+  const categories = await Category.find({ user: session.user.id });
   const { accounts: allAccounts } = await getConsolidatedAccounts(
     session.user.id,
   );
