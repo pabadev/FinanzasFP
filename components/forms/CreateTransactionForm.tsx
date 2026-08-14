@@ -11,9 +11,11 @@ interface AccountOption {
 export function CreateTransactionForm({
   entityId,
   accounts,
+  categories = [],
 }: {
   entityId: string;
   accounts: AccountOption[];
+  categories?: { name: string; type: string }[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -126,12 +128,29 @@ export function CreateTransactionForm({
 
             <div className="form-group">
               <label htmlFor="tx-category">Categoría</label>
-              <input
-                id="tx-category"
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              />
+              {categories.length > 0 ? (
+                <select
+                  id="tx-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="">Sin categoría</option>
+                  {categories
+                    .filter((item) => item.type === type)
+                    .map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  id="tx-category"
+                  type="text"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+              )}
             </div>
 
             <div className="form-group">

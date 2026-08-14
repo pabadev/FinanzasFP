@@ -1,6 +1,7 @@
 ﻿import Account from "@/models/Account";
 import Transaction from "@/models/Transaction";
 import AuditLog from "@/models/AuditLog";
+import ExchangeRate from "@/models/ExchangeRate";
 import { connectDB } from "@/lib/db";
 import { requireRole, requireEntityMembership } from "@/lib/rbac";
 
@@ -8,7 +9,7 @@ interface TransferInput {
   fromAccountId: string;
   toAccountId: string;
   amount: number;
-  currency: string;
+  currency?: string;
   type:
     | "transfer_out"
     | "capital_injection"
@@ -36,11 +37,8 @@ export async function executeTransfer(input: TransferInput) {
   if (fromId === toId)
     throw new Error("No puedes transferir a la misma cuenta");
 
-  if (
-    fromAccount.currency !== toAccount.currency ||
-    fromAccount.currency !== input.currency
-  ) {
-    throw new Error("Las cuentas deben estar en la misma moneda");
+  if (input.currency && input.currency !== fromAccount.currency) {
+    throw new Error("La moneda no coincide con la cuenta de origen");
   }
 
   await requireRole(
@@ -49,6 +47,22 @@ export async function executeTransfer(input: TransferInput) {
     fromEntity,
   );
   await requireEntityMembership(input.userId, toEntity);
+
+  const fromCurrency = fromAccount.currency;
+  const toCurrency = toAccount.currency;
+
+  let toAmount = input.amount;
+  if (fromCurrency !== toCurrency) {
+    const rate = await ExchangeRate.findOne({
+      from: fromCurrency,
+      to: toCurrency,
+    });
+    if (!rate)
+      throw new Error(
+        `No hay tipo de cambio para ${fromCurrency} → ${toCurrency}`,
+      );
+    toAmount = Math.round(input.amount * rate.rate);
+  }
 
   const updatedFrom = await Account.findOneAndUpdate(
     { _id: fromAccount._id, isActive: true, balance: { $gte: input.amount } },
@@ -60,7 +74,7 @@ export async function executeTransfer(input: TransferInput) {
 
   await Account.findOneAndUpdate(
     { _id: toAccount._id, isActive: true },
-    { $inc: { balance: input.amount } },
+    { $inc: { balance: toAmount } },
     { new: true },
   );
 
@@ -70,7 +84,7 @@ export async function executeTransfer(input: TransferInput) {
       account: fromId,
       type: input.type,
       amount: input.amount,
-      currency: input.currency,
+      currency: fromCurrency,
       counterpartEntity: toEntity,
       description: input.description,
       createdBy: input.userId,
@@ -82,8 +96,8 @@ export async function executeTransfer(input: TransferInput) {
       entity: toEntity,
       account: toId,
       type: "transfer_in",
-      amount: input.amount,
-      currency: input.currency,
+      amount: toAmount,
+      currency: toCurrency,
       counterpartEntity: fromEntity,
       relatedTransaction: outTx._id,
       description: input.description,

@@ -74,6 +74,19 @@ export const CreditPaymentInputSchema = z.object({
   accountId: z.string().length(24),
 });
 
+export const ExchangeRateInputSchema = z.object({
+  from: z.string().length(3),
+  to: z.string().length(3),
+  rate: z.number().positive(),
+  source: z.string().max(80).optional(),
+});
+
+export const CategoryInputSchema = z.object({
+  entity: z.string().length(24),
+  name: z.string().min(2).max(80),
+  type: z.enum(["income", "expense"]),
+});
+
 export const TransactionInputSchema = z.object({
   entity: z.string().length(24),
   account: z.string().length(24),

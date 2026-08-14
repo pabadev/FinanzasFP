@@ -67,6 +67,8 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   - `GET|POST /api/customers?entity=` — listar / crear clientes (scoping por entidad).
   - `GET|POST /api/credits?entity=` — listar / crear créditos (desembolso + amortización).
   - `POST /api/credits/payment` — pagar cuota (marca pagada + `Transaction`).
+  - `GET|POST /api/exchange-rates` — tipos de cambio (upsert por par, conversión multi-moneda).
+  - `GET|POST /api/categories?entity=` — categorías configurables (income|expense).
   - `POST /api/register` — con rate limit (5/min por IP) y validación de password ≥8.
 - **POS real e inventario real**: `pos/page.tsx` con `PosCheckout` (consumo de `/api/products` y `/api/sales`),
   `inventory/page.tsx` con `CreateProductForm`, movimientos de stock y alertas de mínimo.
@@ -76,37 +78,33 @@ ingresos y gastos de distintas fuentes (p. ej. crédito bancario) y pago de cuot
   `services/creditService.ts` (amortización francesa/americana), `POST /api/credits` (desembolso `income`
   o `expense` según dirección) y `POST /api/credits/payment` (paga cuota → `expense`/`income` y marca pagada).
   Panel `CreditsPanel` en dashboards personal y de negocio con `CreateCreditForm` y `PayInstallmentForm`.
+- **Consolidación**: `ExchangeRate` + conversión multi-moneda en transferencias, categorías configurables,
+  balance consolidado personal+negocio, `CreateTransferForm` (inter-entidad), `CreateBusinessEntityForm`.
+  Servicio `lib`/`services/consolidationService.ts` (cuentas de todas las entidades + conversión).
 - **Dashboards reales**: `app/(dashboard)/personal/page.tsx` y
   `app/(dashboard)/business/[businessId]/page.tsx` (cuentas, KPIs del mes, actividad reciente,
-  ventas del mes, stock bajo, cuentas por cobrar, créditos). Formularios: `CreateAccountForm`,
-  `CreateTransactionForm`, `CreateProductForm`, `CreateCustomerForm`, `CreateCreditForm`,
-  `PayInstallmentForm`, `SalePaymentForm`.
+  ventas del mes, stock bajo, cuentas por cobrar, créditos, transferencias, categorías). Formularios:
+  `CreateAccountForm`, `CreateTransactionForm`, `CreateProductForm`, `CreateCustomerForm`,
+  `CreateCreditForm`, `PayInstallmentForm`, `SalePaymentForm`, `CreateTransferForm`,
+  `CreateCategoryForm`, `CreateBusinessEntityForm`, `ExchangeRateForm`.
 - **Seguridad aplicada**: headers (CSP, X-Frame-Options…), scoping IDOR, rol real, sin enumeración
   de usuarios, rate limiting en login/register (en memoria), `npm audit` = 0 vulnerabilidades.
 
 ## 6. Pendiente / limitaciones conocidas
 
-- **Sin UI** para: transferencias, crear entidad de negocio (solo API).
 - **Rate limiter en memoria** (`lib/rateLimit.ts`): en Vercel (serverless) cada instancia tiene su
   propio store → migrar a Redis/@upstash antes de producción real.
 - **2FA**: campos `twoFactorSecret`/`twoFactorEnabled` en `User` sin implementar; si se activa,
   cifrar el secreto (AES-256-GCM) — hoy iría en texto plano.
-- **Multi-moneda sin conversión**: transferencias entre cuentas de distinta moneda están
-  BLOQUEADAS por diseño (falta `ExchangeRate`).
 - CSP con `'unsafe-inline'` (necesario para Next; endurecer con nonces si se quiere).
+- Auditoría/reversión: sin anulación de operaciones ni ajustes de saldo auditados desde UI.
 
 ## 7. PASOS A SEGUIR (en orden)
 
-### Fases 2 y 3 — ✅ COMPLETADAS
-Ventas e inventario reales (Customer, cuentas por cobrar, POS, inventario) y créditos/préstamos
-(Credit, amortización, desembolso, pago de cuota) implementados y desplegados.
-
-### Fase 4 — Consolidación
-1. **UI de transferencias** (`CreateTransferForm`) → `POST /api/transfers`, incl. inter-entidad
-   (capital_injection, partner_withdrawal, interentity_loan).
-2. **UI de entidades de negocio** (formulario en dashboard).
-3. **`ExchangeRate`** + permitir transferencias multi-moneda con conversión.
-4. Categorías configurables y balance consolidado personal+negocio.
+### Fases 2, 3 y 4 — ✅ COMPLETADAS
+Ventas/inventario (Customer, cuentas por cobrar, POS, inventario), créditos/préstamos (Credit,
+amortización, desembolso, pago de cuota) y consolidación (transferencias, ExchangeRate, categorías,
+balance consolidado) implementados y desplegados.
 
 ### Fase 5 — Cierre de seguridad
 1. **Rate limiter con Redis/Upstash** (reemplazar `lib/rateLimit.ts`; `@upstash/ratelimit` ya está

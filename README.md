@@ -15,15 +15,16 @@ Funcional de punta a punta en el flujo de dinero básico:
 - ✅ **Entidades** (personal / business) con cuenta "Caja" por defecto.
 - ✅ **Cuentas** (bank, cash, credit_card, wallet) por entidad.
 - ✅ **Ingresos y gastos** con saldo atómico y ledger (`Transaction`).
-- ✅ **Transferencias** entre cuentas (misma moneda, débito atómico, tipos inter-entidad).
+- ✅ **Transferencias** entre cuentas (débito atómico, tipos inter-entidad, conversión multi-moneda con `ExchangeRate`).
 - ✅ **Productos** (physical/service) y **ventas** con descuento atómico de inventario y métodos de pago (incl. crédito).
 - ✅ **Clientes** y **cuentas por cobrar** (`Customer`, ventas `pending|partial`, abonos que acreditan la cuenta y crean `income`).
 - ✅ **POS real** e **inventario real** (stock, alertas de mínimo, movimientos).
 - ✅ **Créditos/préstamos** (`Credit`): amortización francesa/americana, desembolso (`income`) y pago de cuota (`expense`).
+- ✅ **Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio, alta de entidades de negocio desde el dashboard.
 - ✅ **Dashboards** (personal y negocio) con datos reales + formularios de alta de cuentas y movimientos.
 - ✅ **Seguridad**: scoping multi-tenant (IDOR cerrado), headers de seguridad, validación zod, sin enumeración de usuarios, `npm audit` limpio.
 
-Pendiente (ver [Roadmap](#roadmap)): `ExchangeRate`, UI de transferencias, categorías configurables, 2FA, rate limiter con Redis.
+Pendiente (ver [Roadmap](#roadmap)): 2FA, rate limiter con Redis, auditoría completa con reversión/anulación, CSP con nonces.
 
 ---
 
@@ -53,12 +54,14 @@ app/
   api/register, api/entities, api/accounts,
   api/transactions, api/transfers,
   api/products, api/sales, api/sales/payment,
-  api/customers, api/credits, api/credits/payment  # Route Handlers
+  api/customers, api/credits, api/credits/payment,
+  api/exchange-rates, api/categories        # Route Handlers
 components/
   dashboard/  MetricCard, SignOutButton, PersonalOnboarding, CreditsPanel
   forms/      CreateAccountForm, CreateTransactionForm, CreateCustomerForm,
               CreateProductForm, CreateCreditForm, PayInstallmentForm,
-              SalePaymentForm
+              SalePaymentForm, CreateTransferForm, CreateCategoryForm,
+              CreateBusinessEntityForm, ExchangeRateForm
   pos/        PosCheckout
   ui/         button
 lib/
@@ -69,9 +72,10 @@ lib/
   money.ts    # formateo de centavos → moneda
   rateLimit.ts
 models/       # User, Entity, Account, Transaction, Product, Sale,
-              # Customer, Credit, AuditLog
+              # Customer, Credit, ExchangeRate, Category, AuditLog
 services/     # accountService, transactionService, transferService,
-              # saleService, customerService, creditService, auditService
+              # saleService, customerService, creditService,
+              # consolidationService, auditService
 types/next-auth.d.ts
 middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 ```
@@ -90,6 +94,8 @@ middleware.ts # ELIMINADO en Next 16 (auth en layout + handlers)
 - **Sale**: entity, items[] (snapshot), total, paidAmount, paymentMethod (`cash|transfer|card|credit`), account, customer, status (`paid|pending|partial`), soldBy.
 - **Customer**: entity, name, contact, phone, email, debt.
 - **Credit**: entity, lender, direction (`incoming|outgoing`), amount, currency, rate, term, frequency (`monthly|biweekly|weekly`), amortization (`french|american`), installments[] (number, dueDate, principal, interest, total, paid), status (`active|paid|cancelled`).
+- **ExchangeRate**: from, to (único `from+to`), rate, source.
+- **Category**: entity, name (único por entidad), type (`income|expense`).
 - **AuditLog**: append-only, action (`delete|manual_balance_adjustment|transfer|role_change|sale_void`), before/after, ip.
 
 Índices compuestos en `entity+date` para Transaction y `entity+sku` (unique) para Product.
@@ -110,7 +116,7 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/accounts` | POST | Crea cuenta (rol owner/admin/accountant) |
 | `/api/transactions?entity=&account=&limit=` | GET | Ledger ordenado por fecha |
 | `/api/transactions` | POST | `income`/`expense` con saldo atómico (expense exige fondos) |
-| `/api/transfers` | POST | Transferencia entre cuentas (misma moneda, atómica) |
+| `/api/transfers` | POST | Transferencia entre cuentas (atómica; conversión multi-moneda vía `ExchangeRate`) |
 | `/api/products?entity=` | GET | Lista productos de la entidad |
 | `/api/products` | POST | Crea producto |
 | `/api/sales` | POST | Crea venta (descuenta stock atómico, ledger `sale_payment`) |
@@ -121,6 +127,10 @@ Todas exigen sesión (401 si no) y validan pertenencia a la entidad. Montos en c
 | `/api/credits?entity=` | GET | Lista créditos de la entidad |
 | `/api/credits` | POST | Crea crédito (amortización + desembolso `income`/`expense`) |
 | `/api/credits/payment` | POST | Paga cuota (marca pagada, crea `Transaction`) |
+| `/api/exchange-rates` | GET | Lista tipos de cambio |
+| `/api/exchange-rates` | POST | Crea/actualiza tipo de cambio (upsert por par) |
+| `/api/categories?entity=` | GET | Lista categorías de la entidad |
+| `/api/categories` | POST | Crea categoría |
 
 ---
 
@@ -173,7 +183,7 @@ npm run lint       # eslint (flat config)
 
 1. ✅ **Fase 2 — Ventas e inventario reales**: modelo `Customer` + cuentas por cobrar (abonos, `status: partial`), POS e inventario conectados a `/api/sales` y `/api/products`, alertas de stock mínimo.
 2. ✅ **Fase 3 — Créditos/préstamos**: modelo `Credit` (prestador, monto, tasa, plazo, cuotas), servicio de amortización, desembolso (`income`) y pago de cuota (`expense`) que marca cuotas pagadas.
-3. **Fase 4 — Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio.
+3. ✅ **Fase 4 — Consolidación**: UI de transferencias inter-entidad (`capital_injection`, `partner_withdrawal`, `interentity_loan`), `ExchangeRate` + conversión multi-moneda, categorías configurables, balance consolidado personal+negocio.
 4. **Fase 5 — Cierre**: 2FA TOTP (secreto cifrado), rate limiter con Redis/Upstash (hoy en memoria, no sirve multi-instancia), auditoría completa y reversión/anulación de operaciones, mejorar CSP con nonces.
 
 ---

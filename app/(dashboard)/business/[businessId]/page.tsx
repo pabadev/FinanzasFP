@@ -5,10 +5,12 @@ import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { requireEntityMembership } from "@/lib/rbac";
 import { formatMoney } from "@/lib/money";
+import { getConsolidatedAccounts } from "@/services/consolidationService";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { CreateAccountForm } from "@/components/forms/CreateAccountForm";
 import { CreateTransactionForm } from "@/components/forms/CreateTransactionForm";
+import { CreateTransferForm } from "@/components/forms/CreateTransferForm";
 import { SalePaymentForm } from "@/components/forms/SalePaymentForm";
 import { CreditsPanel } from "@/components/dashboard/CreditsPanel";
 import Entity from "@/models/Entity";
@@ -18,6 +20,7 @@ import Sale from "@/models/Sale";
 import Product from "@/models/Product";
 import Customer from "@/models/Customer";
 import Credit from "@/models/Credit";
+import Category from "@/models/Category";
 
 export default async function BusinessDashboardPage({
   params,
@@ -62,6 +65,25 @@ export default async function BusinessDashboardPage({
       Customer.find({ entity: businessId }).sort({ name: 1 }),
       Credit.find({ entity: businessId }).sort({ createdAt: -1 }),
     ]);
+
+  const categories = await Category.find({ entity: businessId });
+  const { accounts: allAccounts } = await getConsolidatedAccounts(
+    session.user.id,
+  );
+
+  const categoriesForForm = categories.map((category) => ({
+    name: category.name,
+    type: category.type,
+  }));
+
+  const transferAccounts = allAccounts.map((account) => ({
+    _id: account._id,
+    name: account.name,
+    entityId: account.entityId,
+    entityName: account.entityName,
+    entityType: account.entityType,
+    currency: account.currency,
+  }));
 
   const salesTotal = monthSales.reduce(
     (sum, sale) => sum + (sale.total ?? 0),
@@ -179,9 +201,21 @@ export default async function BusinessDashboardPage({
           <CreateTransactionForm
             entityId={businessId}
             accounts={accountsForForm}
+            categories={categoriesForForm}
           />
         </section>
       </div>
+
+      <section className="panel mt">
+        <h3>Transferencias</h3>
+        {transferAccounts.length > 1 ? (
+          <CreateTransferForm accounts={transferAccounts} />
+        ) : (
+          <p className="small-text">
+            Necesitas al menos dos cuentas para transferir.
+          </p>
+        )}
+      </section>
 
       <div className="grid-two">
         <section className="panel">

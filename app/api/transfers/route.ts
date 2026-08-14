@@ -8,7 +8,7 @@ const TransferSchema = z.object({
   fromAccountId: z.string().length(24),
   toAccountId: z.string().length(24),
   amount: z.number().int().positive(),
-  currency: z.string().length(3),
+  currency: z.string().length(3).optional(),
   type: z.enum([
     "transfer_out",
     "capital_injection",
